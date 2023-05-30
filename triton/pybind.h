@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include "nvOCDR.h"
+#include "postprocess.h"
 
 namespace py = pybind11;
 using namespace nvocdr;

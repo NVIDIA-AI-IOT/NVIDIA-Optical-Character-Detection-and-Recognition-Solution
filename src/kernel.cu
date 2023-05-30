@@ -532,3 +532,71 @@ KeepAspectRatioResize(void* inData, void* outData, const nvinfer1::Dims& inShape
     // checkKernelErrors();
     return rescale;
 }
+
+__global__ void calculateBoxDistanceLauncher(float* boxCenters,float* boxLeftCenters ,float* boxRightCenters, short* letterMask, float* r2lDistance, const int letterNum)
+{
+    int i = blockIdx.x;
+    int j = threadIdx.x;
+    if(j < letterNum)
+    {
+        float box1_x =  boxCenters[2*i];
+        float box1_y =  boxCenters[2*i + 1];
+        float box2_x =  boxCenters[2*j];
+        float box2_y =  boxCenters[2*j + 1];
+        double slope = -(box2_y - box1_y) / (box2_x - box1_x + EXP);
+        float radian = atan(slope);
+        float angle = abs(radian/PI *180);
+
+        // box1 left/right side center
+        float box1_lx = boxLeftCenters[2*i];
+        float box1_ly = boxLeftCenters[2*i + 1];
+        float box1_rx = boxRightCenters[2*i];
+        float box1_ry = boxRightCenters[2*i + 1];
+        // box2 left/right side center
+        float box2_lx = boxLeftCenters[2*j];
+        float box2_ly = boxLeftCenters[2*j + 1];
+        float box2_rx = boxRightCenters[2*j];
+        float box2_ry = boxRightCenters[2*j + 1];
+
+        float left2RightDis = sqrt( (box1_lx -box2_rx)*(box1_lx -box2_rx) + (box1_ly -box2_ry)*(box1_ly -box2_ry));
+        float right2LeftDis = sqrt( (box1_rx -box2_lx)*(box1_rx -box2_lx) + (box1_ry -box2_ly)*(box1_ry -box2_ly));
+        r2lDistance[i*MAX_LETTERS_IN_IMAGE + j] = right2LeftDis;
+        if(angle < ANGLE_THRESHOLD )
+        {
+            letterMask[i*MAX_LETTERS_IN_IMAGE + j] = 1;
+        }
+        else
+        {
+            letterMask[i*MAX_LETTERS_IN_IMAGE + j] = -1;
+        }
+        printf("%d, %d, (%f, %f), (%f, %f), %f ,%f, %f ,%f, %d \n",i,j,box1_rx,box1_ry,box2_lx,box2_ly,radian,angle, left2RightDis, right2LeftDis , letterMask[i*MAX_LETTERS_IN_IMAGE + j]);
+    }
+    
+
+}
+
+
+void calculateBoxDistance(void* boxCenters, void* boxLeftCenters, void* boxRightCenters, void* letterMask, void* r2lDistance, const int letterNum, const cudaStream_t& stream)
+{
+    std::cout<< letterNum << " " << divUp(letterNum, BLOCK) << std::endl;
+    dim3 block(BLOCK * divUp(letterNum, BLOCK));
+    dim3 grid(letterNum);
+
+    float* boxCentersMetric = static_cast<float*>(boxCenters);
+    float* boxLeftCentersMetric = static_cast<float*>(boxLeftCenters);
+    float* boxRightCentersMetric = static_cast<float*>(boxRightCenters);
+    short* letterMaskMetric = static_cast<short*>(letterMask);
+    float* r2lDistanceMetric = static_cast<float*>(r2lDistance);
+    calculateBoxDistanceLauncher<<<grid, block,0, stream>>>(boxCentersMetric, boxLeftCentersMetric, boxRightCentersMetric, letterMaskMetric,r2lDistanceMetric, letterNum);
+    // // sm for rotate coeff
+    // size_t smem_size = 2 * numOfDegrees * sizeof(float);
+    // calculateRotateArea<<<grid, block, smem_size, stream>>>(inContourPointsData, outMinAreaRectBox, static_cast<float*>(rotateCoeffs), static_cast<int*>(numPointsInContourBuf), static_cast<int*>(contoursToImages));
+    // cudaStreamSynchronize(stream);
+    // checkKernelErrors();
+    // dim3 grid1(numContours);
+  
+    // findMinAreaAndAngle<<<grid1, block, smem_size, stream>>>(outMinAreaRectBox, numOfDegrees);
+    cudaStreamSynchronize(stream);
+    checkKernelErrors();
+}
+

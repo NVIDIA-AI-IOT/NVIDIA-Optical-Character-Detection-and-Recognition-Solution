@@ -148,5 +148,12 @@ PYBIND11_MODULE(nvocdr, m) {
         .def_readwrite("y4", &Polygon::y4)
         ;
 
+    py::class_<Letter2Sentence>(m, "Word2Sentence")
+        .def(py::init<>())
+        .def("extractSentence", &Letter2Sentence::extractSentence)
+        // .def("warpPatchInfer", &Letter2Sentence::warpPatchInfer)
+        ;
+
+
 }
 

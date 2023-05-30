@@ -23,6 +23,10 @@
 #define GY15  19235 // == 0.587f*32768 + 0.5
 #define BY15  3735  // == 0.114f*32768 + 0.5
 #define PI    3.1415926535897932384626433832795
+#define EXP 1e-6
+#define MAX_LETTERS_IN_IMAGE 1024
+#define ANGLE_THRESHOLD  10
+#define SIDE_DISTANCE_THRESHOLD 30
 
 // tl and bt points coords (4) and the area (1), and angle 1
 #define MIN_AREA_EACH_ANGLE_STRID 6
@@ -299,5 +303,7 @@ void calculateRotateCoefCUDA(void* rotateCoefBuf, const int degrees ,const cudaS
 void patchMergeWarp(void* patchData, void* mergeData, void* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI,const cudaStream_t& stream);
 
 float KeepAspectRatioResize(void* inData, void* outData, const nvinfer1::Dims& inShape, const int32_t out_h, const int32_t out_w, const cudaStream_t& stream);
+
+void calculateBoxDistance(void* boxCenters, void* boxLeftCenters, void* boxRightCenters, void* letterMask,   void* r2lDistance, const int letterNum, const cudaStream_t& stream);
 
 #endif

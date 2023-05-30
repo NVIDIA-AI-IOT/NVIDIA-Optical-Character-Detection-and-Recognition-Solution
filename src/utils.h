@@ -21,6 +21,11 @@ typedef struct
 
 typedef struct
 {
+    float x, y;
+} Point2d_f;
+
+typedef struct
+{
     Point2d leftTop;
     Point2d rightTop;
     Point2d leftBottom;
