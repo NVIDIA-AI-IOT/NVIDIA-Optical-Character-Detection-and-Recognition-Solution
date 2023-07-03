@@ -1,0 +1,25 @@
+{
+    "is_high_resolution_input": true,
+    "resize_keep_aspect_ratio": true,
+
+    "overlapRate": 0.5,
+    "input_data_format": "NHWC",
+    "ocdnet_trt_engine_path": "/opt/nvocdr/engines/ocdnet.fp16.engine",
+    "ocdnet_infer_input_shape": [
+        3,
+        OCD_INPUT_H,
+        OCD_INPUT_W
+    ],
+    "ocdnet_binarize_threshold": 0.3,
+    "ocdnet_polygon_threshold": 0.1,
+    "ocdnet_upclip_ratio": 1.5,
+    "ocdnet_max_candidate": 1000,
+    "upsidedown": true,
+    "ocrnet_trt_engine_path": "/opt/nvocdr/engines/ocrnet.fp16.engine",
+    "ocrnet_dict_file": "/opt/nvocdr/onnx_model/character_list",
+    "ocrnet_infer_input_shape": [
+        1,
+        32,
+        100
+    ]
+}
