@@ -298,4 +298,6 @@ void calculateRotateCoefCUDA(void* rotateCoefBuf, const int degrees ,const cudaS
 
 void patchMergeWarp(void* patchData, void* mergeData, void* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI,const cudaStream_t& stream);
 
+float KeepAspectRatioResize(void* inData, void* outData, const nvinfer1::Dims& inShape, const int32_t out_h, const int32_t out_w, const cudaStream_t& stream);
+
 #endif

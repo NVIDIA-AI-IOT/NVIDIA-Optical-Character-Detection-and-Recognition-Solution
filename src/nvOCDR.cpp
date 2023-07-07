@@ -110,6 +110,95 @@ nvOCDRStat nvOCDR_inference(nvOCDRInput input, nvOCDROutputMeta* output, nvOCDRp
     return SUCCESS;
 }
 
+nvOCDRStat nvOCDR_high_resolution_inference(nvOCDRInput input, nvOCDROutputMeta* output, nvOCDRp nvocdr_ptr,
+                                            float overlap_rate)
+{
+    nvocdr::nvOCDR* ptr = static_cast<nvocdr::nvOCDR*>(nvocdr_ptr);
+
+    nvinfer1::Dims infer_shape;
+    infer_shape.nbDims = 4;
+    infer_shape.d[0] = input.shape[0];
+    infer_shape.d[1] = input.shape[1];
+    infer_shape.d[2] = input.shape[2];
+    infer_shape.d[3] = input.shape[3];
+
+    int32_t batch_size = input.shape[0];
+
+    if (batch_size > MAX_BATCH_SIZE)
+    {
+        printf("The input data's batch size exceeds the MAX_BATCH_SIZE %d of nvOCDR.", input.shape[0]);
+        return FAIL;
+    }
+
+    std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>> nvocdr_output;
+
+    //Do inference
+#if DEBUG
+    Polygon debug_poly;
+    debug_poly.x1 = 100, debug_poly.y1 = 100;
+    debug_poly.x2 = 300, debug_poly.y2 = 100;
+    debug_poly.x3 = 300, debug_poly.y3 = 300;
+    debug_poly.x4 = 100, debug_poly.y4 = 300;
+    Polygon debug_poly_1;
+    debug_poly_1.x1 = 400, debug_poly_1.y1 = 400;
+    debug_poly_1.x2 = 600, debug_poly_1.y2 = 400;
+    debug_poly_1.x3 = 600, debug_poly_1.y3 = 600;
+    debug_poly_1.x4 = 400, debug_poly_1.y4 = 600;
+    nvocdr_output.push_back({std::make_pair(debug_poly, "NVOCDRDEBUG_0_0")});
+    nvocdr_output.push_back({std::make_pair(debug_poly, "中文NVOCDRDEBUG_1_0"),
+                             std::make_pair(debug_poly_1, "中文NVOCDRDEBUG_1_1")});
+#else
+    ptr->wrapInferPatch(input.mem_ptr, infer_shape, overlap_rate, nvocdr_output);
+#endif
+    //Construct output
+    output->batch_size = batch_size;
+
+    //Compute the total polys:
+    int32_t total_cnt = 0;
+    for(auto img_polys: nvocdr_output)
+    {
+        total_cnt += img_polys.size();
+    }
+
+    if(total_cnt == 0)
+    {
+        for(int32_t i = 0; i < batch_size; ++i)
+        {
+            output->text_cnt[i] = 0;
+        }
+        output->text_ptr = nullptr;
+        return SUCCESS;
+    }
+
+    output->text_ptr = static_cast<nvOCDROutputBlob*>(malloc(sizeof(nvOCDROutputBlob) * total_cnt));
+    int32_t text_id = 0;
+    for(int32_t i = 0; i < batch_size; ++i)
+    {
+        output->text_cnt[i] = nvocdr_output[i].size();
+        for(int32_t j = 0; j < output->text_cnt[i]; ++j)
+        {
+            Polygon temp_poly = nvocdr_output[i][j].first;
+            std::string temp_str = nvocdr_output[i][j].second.first;
+            float temp_conf = nvocdr_output[i][j].second.second;
+            nvOCDROutputBlob* temp_blob = &output->text_ptr[text_id];
+            temp_blob->poly_cnt = 8;
+            temp_blob->polys[0] = temp_poly.x1;
+            temp_blob->polys[1] = temp_poly.y1;
+            temp_blob->polys[2] = temp_poly.x2;
+            temp_blob->polys[3] = temp_poly.y2;
+            temp_blob->polys[4] = temp_poly.x3;
+            temp_blob->polys[5] = temp_poly.y3;
+            temp_blob->polys[6] = temp_poly.x4;
+            temp_blob->polys[7] = temp_poly.y4;
+            temp_blob->ch_len = temp_str.size();
+            strncpy(temp_blob->ch, temp_str.c_str(), (size_t) MAX_CHARACTER_LEN - 1);
+            temp_blob->conf = temp_conf;
+            text_id +=1;
+        }
+    }
+ 
+    return SUCCESS;
+}
 
 //============================== Implementation of nvOCDR==========================================//
 
@@ -369,7 +458,8 @@ nvOCDR::inferPatch(void* oriImgData, void* patchImgs, const Dims& patchImgsShape
     checkCudaErrors(cudaMemcpyAsync(oriImgMask.data,  oriImgMaskDev.data(), oriImgMaskDev.nbBytes(), cudaMemcpyDeviceToHost,mStream));
 
 #ifdef TRITON_DEBUG
-    std::string pt_img_file = "./samples/highResolution/results/0_merge_cuda.jpg";
+    cudaStreamSynchronize(mStream);
+    std::string pt_img_file = "./debug_img/0_merge_cuda.jpg";
     cv::imwrite(pt_img_file, oriImgBitMap); 
 #endif
 
@@ -564,4 +654,111 @@ nvOCDR::patchMaskMergeCUDA(void* oriThresholdData, void* patchThresholdData, voi
     patchMergeWarp( patchThresholdData, oriThresholdData, patchRawData, oriRawData, patchImgsShape, oriImgshape, patchROI, oriROI, stream );
 
     return;
+}
+
+void
+nvOCDR::wrapInferPatch(void* input_data, const Dims& input_shape, float overlap_rate,
+                       std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>>& output)
+{
+    //Compute the patch parameters
+    int32_t patch_h = mParam.ocdnet_infer_input_shape[1];
+    int32_t patch_w = mParam.ocdnet_infer_input_shape[1];
+    int32_t batch_size = input_shape.d[0];
+    if (batch_size!=1)
+    {
+        std::cerr<<"High resolution inference only supports bs=1"<<std::endl;
+        exit(1);
+    }
+    int32_t orig_h = input_shape.d[1];
+    int32_t orig_w = input_shape.d[2];
+    int32_t orig_c = input_shape.d[3];
+    int32_t overlap_h = overlap_rate * patch_h;
+    int32_t overlap_w = overlap_rate * patch_w;
+    int32_t crop_img_w = int32_t(ceilf(float(orig_w - patch_w)/float(patch_w - overlap_w)) * (patch_w - overlap_w) + patch_w);
+    int32_t crop_img_h = int32_t(ceilf(float(orig_h - patch_h)/float(patch_h - overlap_h)) * (patch_h - overlap_h) + patch_h);
+    int32_t crop_img_size = crop_img_h * crop_img_w * orig_c;
+    Dims crop_input_shape;
+    crop_input_shape.nbDims=4;
+    crop_input_shape.d[0] = batch_size;
+    crop_input_shape.d[1] = crop_img_h;
+    crop_input_shape.d[2] = crop_img_w;
+    crop_input_shape.d[3] = orig_c;
+
+    void* crop_img_ptr;
+    checkCudaErrors(cudaMalloc(&crop_img_ptr, crop_img_size * sizeof(uchar)));
+
+    int32_t num_col = int32_t(float(crop_img_w - patch_w)/float(patch_w - overlap_w)) + 1;
+    int32_t num_row = int32_t(float(crop_img_h - patch_h)/float(patch_h - overlap_h)) + 1;
+    Dims patches_shape;
+    patches_shape.nbDims=4;
+    patches_shape.d[0] = num_col * num_row;
+    patches_shape.d[1] = patch_h;
+    patches_shape.d[2] = patch_w;
+    patches_shape.d[3] = orig_c;
+
+    int32_t patch_img_size = patch_w * patch_h * orig_c;
+    void* patch_imgs_ptr;
+    checkCudaErrors(cudaMalloc(&patch_imgs_ptr, patch_img_size * num_col * num_row * sizeof(uchar)));
+
+    float rescale = 1.0f;
+    rescale = KeepAspectRatioResize(input_data, crop_img_ptr, input_shape,
+                                    crop_img_h, crop_img_w, mStream);
+
+    // // dump the image
+    // std::vector<uint8_t> raw_data(crop_img_size);
+    // // std::vector<uint8_t> raw_data(orig_h * orig_w * orig_c);
+    // cudaMemcpy(raw_data.data(), crop_img_ptr, crop_img_size, cudaMemcpyDeviceToHost);
+    // // cudaMemcpy(raw_data.data(), input_data, orig_h * orig_w * orig_c, cudaMemcpyDeviceToHost);
+    // cv::Mat frame_out(crop_img_h, crop_img_w, CV_8UC3, raw_data.data());
+    // // cv::Mat frame_out(orig_h, orig_w, CV_8UC3, raw_data.data());
+    // std::string img_path = "./debug_img/debug_pcb.png";
+    // cv::imwrite(img_path, frame_out);
+    
+    //Create the cropped patches
+    int32_t x_start = 0;
+    int32_t y_start = 0;
+    uchar* patch_ptr = reinterpret_cast<uchar*>(patch_imgs_ptr);
+    for(int i = 0; i < num_row; i++)
+        for(int j = 0; j < num_col; j++)
+        {
+            x_start = int32_t(j*(patch_w - overlap_w));
+            y_start = int32_t(i*(patch_h - overlap_h));
+            uchar* cur_crop_ptr = reinterpret_cast<uchar*>(crop_img_ptr) + y_start * crop_img_w * orig_c + x_start * orig_c;
+            checkCudaErrors(cudaMemcpy2D(patch_ptr, orig_c * patch_w * sizeof(uchar),
+                                         cur_crop_ptr, orig_c * crop_img_w * sizeof(uchar),
+                                         patch_w * orig_c * sizeof(uchar), patch_h, cudaMemcpyDeviceToDevice));
+            // //dump the patch
+            // std::vector<uint8_t> raw_data(patch_img_size);
+            // cudaMemcpy(raw_data.data(), patch_ptr, patch_img_size, cudaMemcpyDeviceToHost);
+            // cv::Mat frame_out(patch_h, patch_w, CV_8UC3, raw_data.data());
+            // std::string img_path = "./debug_img/debug_pcb_" + std::to_string(i) + std::to_string(j) + ".png";
+            // cv::imwrite(img_path, frame_out);
+
+            patch_ptr += patch_img_size;
+        }
+
+    //Do infer patch
+    std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>> crop_output;
+    inferPatch(crop_img_ptr, patch_imgs_ptr, patches_shape, crop_input_shape, overlap_rate, crop_output);
+    cudaStreamSynchronize(mStream);
+
+    //Postprocess
+    output.clear();
+    output.resize(batch_size);
+    for(auto& output_pair: crop_output[0])
+    {
+        auto poly = output_pair.first;
+        poly.x1 *= rescale;
+        poly.x2 *= rescale;
+        poly.x3 *= rescale;
+        poly.x4 *= rescale;
+        poly.y1 *= rescale;
+        poly.y2 *= rescale;
+        poly.y3 *= rescale;
+        poly.y4 *= rescale;
+        output[0].emplace_back(std::make_pair(poly, output_pair.second));
+    }
+    //Destroy the resources:
+    checkCudaErrors(cudaFree(crop_img_ptr));
+    checkCudaErrors(cudaFree(patch_imgs_ptr));
 }

@@ -81,6 +81,8 @@ typedef struct
 
 nvOCDRp nvOCDR_init(nvOCDRParam param);
 nvOCDRStat nvOCDR_inference(nvOCDRInput input, nvOCDROutputMeta* output, nvOCDRp nvocdr_ptr);
+nvOCDRStat nvOCDR_high_resolution_inference(nvOCDRInput input, nvOCDROutputMeta* output, nvOCDRp nvocdr_ptr,
+                                            float overlap_rate);
 void nvOCDR_deinit(nvOCDRp nvocdr_ptr);
 
 #ifdef __cplusplus

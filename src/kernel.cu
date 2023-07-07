@@ -378,3 +378,147 @@ void patchMergeWarp(void* patchThresholdData, void* mergeThresholdData, void* pa
     checkKernelErrors();
 }
 
+//HWC as input
+template<typename Dtype>
+__device__ Dtype value_at_row_col_channel(Dtype *im, int rowIdx, int colIdx, int chIdx, int batchIdx, int colStride, int rowStride, int batchStride)
+{
+    Dtype *p = im + chIdx + ((int)colIdx) * colStride + ((int)rowIdx) * rowStride + ((int)batchIdx)*batchStride;
+    return p[0];
+}
+
+template<typename Dtype>
+__device__ void set_value_at_row_col_channel(Dtype vP_ch, Dtype *out_im, int rowIdx, int colIdx, int chIdx, int batchIdx, int colStride, int rowStride, int batchStride)
+{
+    Dtype *p = out_im + chIdx + ((int)colIdx) * colStride + ((int)rowIdx) * rowStride + ((int)batchIdx)*batchStride;
+    p[0] = vP_ch;
+}
+
+template<typename Dtype>
+__host__ __device__ __forceinline__  Dtype bordConstant(Dtype* src, int src_w, int src_h, int rowIdx, int colIdx, int chIdx, int batchIdx, int colStride, int rowStride, int batchStride)
+{
+    if((float)colIdx >= 0 && colIdx < src_w && (float)rowIdx >= 0 && rowIdx < src_h)
+    {
+        return value_at_row_col_channel(src, rowIdx, colIdx,  chIdx, batchIdx, colStride, rowStride, batchStride);
+    }
+    else 
+    {
+        return (Dtype)-1;
+    }
+}
+
+template<typename Dtype>
+__global__ void resize(
+    Dtype *im, 
+    int im_hh,
+    int im_ww,
+    int out_h,
+    int out_w, 
+    int channels, 
+    int batchSize, 
+    int dstColStride, 
+    int dstRowStride, 
+    int dstBatchStride, 
+    float scale_w, 
+    float scale_h, 
+    Dtype *out_im
+    )
+{
+
+    // float scale_w = float(im_ww)/float(out_w);
+    // float scale_h = float(im_hh)/float(out_h);
+    int srcColStride = channels;
+    int srcRowStride = channels * im_ww;
+    int srcBatchStride = channels * im_ww * im_hh;
+
+
+
+    int x_out = blockIdx.x * blockDim.x + threadIdx.x;
+    int y_out = blockIdx.y * blockDim.y + threadIdx.y;
+    int c_out = threadIdx.z;
+    int b_out = blockIdx.z;
+    
+    if (x_out < out_w && y_out < out_h)
+    {
+
+        float x_out_float = (float) x_out;
+        float y_out_float = (float) y_out;
+        float out = 0;
+        
+        //remapped to source image, called P
+        float P_x_in_float = scale_w * (x_out_float+ 0.5) - 0.5;
+        float P_y_in_float = scale_h * (y_out_float+ 0.5) - 0.5;
+        
+        float x1 = floorf(P_x_in_float);
+        float y1 = floorf(P_y_in_float);
+        
+        float x2 = ceilf(P_x_in_float);
+        float y2 = ceilf(P_y_in_float);
+        
+        Dtype src_reg = bordConstant(im, im_ww, im_hh, y1, x1, c_out, b_out, srcColStride, srcRowStride, srcBatchStride );
+        out = out + src_reg * ((x2 - P_x_in_float) * (y2 - P_y_in_float));
+
+        src_reg = bordConstant(im, im_ww, im_hh, y1, x2, c_out, b_out, srcColStride, srcRowStride, srcBatchStride );
+        out = out + src_reg * ((P_x_in_float - x1) * (y2 - P_y_in_float));
+
+        src_reg = bordConstant(im, im_ww, im_hh, y2, x1, c_out, b_out, srcColStride, srcRowStride, srcBatchStride );
+        out = out + src_reg * ((x2 - P_x_in_float) * (P_y_in_float - y1));
+
+        src_reg = bordConstant(im, im_ww, im_hh, y2, x2, c_out, b_out, srcColStride, srcRowStride, srcBatchStride );
+        out = out + src_reg * ((P_x_in_float - x1) * (P_y_in_float - y1));
+
+        
+        set_value_at_row_col_channel((Dtype)out, out_im, y_out, x_out, c_out, b_out, dstColStride, dstRowStride, dstBatchStride);
+
+    }
+}
+
+float
+KeepAspectRatioResize(void* inData, void* outData, const nvinfer1::Dims& inShape,
+                      const int32_t out_h, const int32_t out_w, const cudaStream_t& stream)
+{
+    //Only support NHWC now
+    int32_t batch_size = inShape.d[0];
+    int32_t img_h = inShape.d[1];
+    int32_t img_w = inShape.d[2];
+    int32_t img_c = inShape.d[3];
+
+    float ar_inp = float(img_w)/float(img_h);
+    float ar_out = float(out_w)/float(out_h);
+
+    int32_t new_width = 0;
+    int32_t new_height = 0;
+    float scale_w = 1.0f;
+    float scale_h = 1.0f;
+    float rescale = 1.0f;
+
+    if (ar_inp >= ar_out)
+    {
+        new_width = out_w;
+        new_height = new_width / ar_inp;
+        rescale = float(img_w) / new_width;
+    }
+    else
+    {
+        new_height = out_h;
+        new_width = new_height * ar_inp;
+        rescale = float(img_h) / new_height;
+    }
+
+    scale_w = float(img_w) / float(new_width);
+    scale_h = float(img_h) / float(new_height);
+
+    int32_t dst_col_stride = img_c;
+    int32_t dst_row_stride = img_c * out_w;
+    int32_t dst_batch_stride = img_c * out_w * out_h;
+
+    int32_t threads_num = 16;
+    dim3 block(threads_num, threads_num, img_c);
+    dim3 grid(divUp(new_width, threads_num), divUp(new_height, threads_num), batch_size);
+    
+    resize<uchar><<<grid, block, 0>>>(reinterpret_cast<uchar*>(inData), img_h, img_w, new_height, new_width, img_c,
+                                               batch_size, dst_col_stride, dst_row_stride, dst_batch_stride,
+                                               scale_w, scale_h, reinterpret_cast<uchar*>(outData));
+    // cudaStreamSynchronize(stream);
+    // checkKernelErrors();
+    return rescale;
+}

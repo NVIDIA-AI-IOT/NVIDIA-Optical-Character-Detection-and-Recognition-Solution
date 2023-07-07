@@ -148,6 +148,8 @@ public:
   float m_OCDNetUnclipRatio = 1.5;
   int m_OCDNetMaxCandidate;
   bool m_RectUpsideDown = false;
+  bool m_IsHighResolution = false;
+  float m_OverlapRatio = 0.5;
   std::string m_OCRNetEnginePath;
   std::string m_OCRNetDictPath;
   std::vector<int> m_OCRNetInferShape;
@@ -429,6 +431,8 @@ char *nvOCDRAlgorithm::QueryProperties ()
             "\n\t\t\tcustomlib-props=\"ocdnet-polygon-threshold:x\""
             "\n\t\t\tcustomlib-props=\"ocdnet-max-candidate:x\""
             "\n\t\t\tcustomlib-props=\"rectifier-upsidedown:x\""
+            "\n\t\t\tcustomlib-props=\"is-high-resolution:x\""
+            "\n\t\t\tcustomlib-props=\"overlap-ratio:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-engine-path:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-dict-path:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-input-shape:x,y,z\"");
@@ -478,6 +482,19 @@ bool nvOCDRAlgorithm::SetProperty(Property &prop)
       if (prop.key.compare("rectifier-upsidedown") == 0)
       {
           m_RectUpsideDown = stoi(prop.value);
+      }
+      if (prop.key.compare("is-high-resolution") == 0)
+      {
+          m_IsHighResolution = stoi(prop.value);
+      }
+      if (prop.key.compare("overlap-ratio") == 0)
+      {
+          m_OverlapRatio = stof(prop.value);
+          if (m_OverlapRatio > 1 or m_OverlapRatio <=0)
+          {
+            printf("overlap-ratio should be in (0, 1]");
+            exit(1);
+          }
       }
       if (prop.key.compare("ocrnet-engine-path") == 0)
       {
@@ -739,7 +756,11 @@ void nvOCDRAlgorithm::OutputThread(void)
       input.mem_ptr = imagedata_ptr;
     // Do nvOCDR inference
     nvOCDROutputMeta output;
-    nvOCDR_inference(input, &output, m_nvOCDRLib);
+    // nvOCDR_inference(input, &output, m_nvOCDRLib);
+    if (m_IsHighResolution)
+      nvOCDR_high_resolution_inference(input, &output, m_nvOCDRLib, m_OverlapRatio);
+    else
+      nvOCDR_inference(input, &output, m_nvOCDRLib);
 #if DEBUG
     // dump the input image
     std::vector<uint8_t> raw_data(m_process_surf->surfaceList[0].dataSize);
