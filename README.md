@@ -109,6 +109,7 @@ int main()
 {
 
     // Init the nvOCDR lib
+    // Please pay attention to the following parameters. You may need to change them according to different models.
     nvOCDRParam param;
     param.input_data_format = NHWC;
     param.ocdnet_trt_engine_path = (char *)"./ocdnet.fp16.engine";
