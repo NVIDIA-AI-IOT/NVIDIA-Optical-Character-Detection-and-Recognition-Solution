@@ -118,6 +118,7 @@ int main()
     param.ocdnet_binarize_threshold = 0.1;
     param.ocdnet_polygon_threshold = 0.3;
     param.ocdnet_max_candidate = 200;
+    param.ocdnet_unclip_ratio = 1.5;
     param.ocrnet_trt_engine_path = (char *)"./ocrnet.fp16.engine";
     param.ocrnet_dict_file = (char *)"./character_list.txt";
     param.ocrnet_infer_input_shape[0] = 1;
