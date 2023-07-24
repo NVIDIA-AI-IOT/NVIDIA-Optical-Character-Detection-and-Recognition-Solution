@@ -46,7 +46,8 @@ class OCDRProcess:
             self.keep_ar = True
         else:
             self.keep_ar = configs['resize_keep_aspect_ratio']
-
+        self.font_size = configs['font_size']
+        self.font_color = configs['font_color']
 
     def preprocess(self, imgs):
         new_w = 0
@@ -134,7 +135,7 @@ class OCDRProcess:
             box = box.astype(np.int32)
             cv2.polylines(pred_canvas, [box], True, (0, 255, 0), 2)
            
-            cv2.putText(pred_canvas, f'{text[0]}', tuple(box[2]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255) , 2)
+            cv2.putText(pred_canvas, f'{text[0]}', tuple(np.min(box,axis=0)), cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.font_color , 2)
             predict_encode.append({'text':text[0], 'text_conf':text[1],'poly':box.reshape(-1).tolist()})
         return pred_canvas, predict_encode
 

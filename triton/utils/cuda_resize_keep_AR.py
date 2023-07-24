@@ -98,9 +98,9 @@ mod = SourceModule("""
             float x1 = floorf(P_x_in_float);
             float y1 = floorf(P_y_in_float);
             
-            float x2 = ceilf(P_x_in_float);
-            float y2 = ceilf(P_y_in_float);
-            
+            float x2 = x1 + 1;
+            float y2 = y1 + 1;
+
             float src_reg = bordConstant(im, im_ww, im_hh, y1, x1, c_out, b_out, srcColStride, srcRowStride, srcBatchStride );
             out = out + src_reg * ((x2 - P_x_in_float) * (y2 - P_y_in_float));
 
@@ -129,7 +129,8 @@ def image_resize(images, out_w, out_h, keep_ar):
     image_h = images.shape[1]
     image_w = images.shape[2]
     image_c = images.shape[3]
-
+    if image_w == out_w and image_h == out_h:
+        return images
     out_np = np.zeros(batch*out_h*out_w*3).astype(np.float32)
     out_np_g = allocate_cuda_array_mem_and_copy(out_np)
 
