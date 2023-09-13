@@ -46,8 +46,10 @@ RUN /usr/src/tensorrt/bin/trtexec --device=${DEVICE} --onnx=/opt/nvidia/nvOCDR/m
 
 # Generate gst-launch-1.0 command
 WORKDIR /opt/nvidia/nvOCDR
+# use new nvstreammux to avoid processing images in this plugin
+ENV USE_NEW_NVSTREAMMUX=yes
 RUN echo "CUDA_VISIBLE_DEVICES=${DEVICE} gst-launch-1.0 filesrc location=\$1 ! qtdemux ! h264parse ! nvv4l2decoder ! \
-        m.sink_0 nvstreammux name=m batch-size=1 width=1920 height=1080 ! \
+        m.sink_0 nvstreammux name=m batch-size=1 ! \
         nvdsvideotemplate customlib-name=/opt/nvidia/nvOCDR/ocdr/deepstream/libnvocdr_impl.so \
         customlib-props="ocdnet-engine-path:/opt/nvidia/nvOCDR/engines/ocdnet.fp16.engine" \
         customlib-props="ocdnet-input-shape:3,736,1280" \

@@ -609,7 +609,7 @@ gboolean nvds_add_ocdr_meta(NvDsBatchMeta *batch_meta, nvOCDROutputMeta &output)
       int box_height = box_ymax - box_ymin;
       // @TODO(tylerz): add constant meta.
       obj_meta->unique_component_id = 0;
-      obj_meta->confidence = 1.0;
+      obj_meta->confidence = output_blob.conf;
       obj_meta->object_id = UNTRACKED_OBJECT_ID;
       obj_meta->class_id = 0;
       NvOSD_RectParams & rect_params = obj_meta->rect_params;
@@ -644,6 +644,18 @@ gboolean nvds_add_ocdr_meta(NvDsBatchMeta *batch_meta, nvOCDROutputMeta &output)
       text_params.font_params.font_size = 11;
       text_params.font_params.font_color = (NvOSD_ColorParams) {
       1, 1, 1, 1};
+
+      #if DEBUG
+      char outname[256] = "infer_output.txt";
+      FILE* fp = fopen(outname, "a");
+      if(fp)
+      {
+        fprintf (fp, "text: [%s]  conf: [%f] bbox: [l:%f t:%f w:%f h:%f]\n",
+            text_params.display_text, output_blob.conf, rect_params.left, rect_params.top, rect_params.width,
+            rect_params.height);
+        fclose(fp);
+      }
+      #endif
 
       // @TODO(tylerz): currently set parent_obj_meta to be NULL
       nvds_add_obj_meta_to_frame (frame_meta, obj_meta, NULL);

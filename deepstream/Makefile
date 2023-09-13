@@ -33,9 +33,7 @@ SRCS:= nvocdrlib_impl.cpp
 INCS:= $(wildcard *.h)
 LIB:=libnvocdr_impl.so
 
-NVDS_VERSION:=6.2
-
-CFLAGS+= -fPIC -DDS_VERSION=\"6.2.0\" \
+CFLAGS+= -fPIC \
 	 -I /usr/local/cuda-$(CUDA_VER)/include \
 	 -I /opt/nvidia/deepstream/deepstream/sources/includes -I /opt/nvidia/deepstream/deepstream/sources/gst-plugins/gst-nvdsvideotemplate/includes \
 	 -I ../include 
@@ -44,8 +42,7 @@ CFLAGS+= -fPIC -DDS_VERSION=\"6.2.0\" \
 # OPENCV_LIB = -lopencv_core -lopencv_imgcodecs
 # CFLAGS += $(OPENCV_INC)
 
-GST_INSTALL_DIR?=/opt/nvidia/deepstream/deepstream-$(NVDS_VERSION)/lib/gst-plugins/
-LIB_INSTALL_DIR?=/opt/nvidia/deepstream/deepstream-$(NVDS_VERSION)/lib/
+LIB_INSTALL_DIR?=/opt/nvidia/deepstream/deepstream/lib/
 
 ifeq ($(TARGET_DEVICE),aarch64)
 	LIBS := -L/usr/lib/aarch64-linux-gnu/tegra
