@@ -273,7 +273,7 @@ bool nvOCDRAlgorithm::SetInitParams(DSCustom_CreateParams *params)
   param.ocdnet_binarize_threshold = m_OCDNetBinarizeThresh;
   param.ocdnet_polygon_threshold = m_OCDNetPolyThresh;
   param.ocdnet_max_candidate = m_OCDNetMaxCandidate;
-  param.ocdnet_upclip_ratio = m_OCDNetUnclipRatio;
+  param.ocdnet_unclip_ratio = m_OCDNetUnclipRatio;
   param.upsidedown = m_RectUpsideDown;
   param.ocrnet_trt_engine_path = (char *)m_OCRNetEnginePath.c_str();
   param.ocrnet_dict_file = (char *)m_OCRNetDictPath.c_str();

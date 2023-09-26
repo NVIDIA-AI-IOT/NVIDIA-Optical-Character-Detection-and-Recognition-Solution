@@ -228,9 +228,9 @@ nvOCDR::paramCheck()
         std::cerr<<"[ERROR] The OCRNet inference channel should be 1 or 3."<<std::endl;
         return false;
     }
-    if (mParam.ocdnet_upclip_ratio <= 0)
+    if (mParam.ocdnet_unclip_ratio <= 0)
     {
-        std::cerr<<"[ERROR] The ocdnet_upclip_ratio should be large than 0"<<std::endl;
+        std::cerr<<"[ERROR] The ocdnet_unclip_ratio should be large than 0"<<std::endl;
         return false;
     }
 
@@ -263,7 +263,7 @@ nvOCDR::nvOCDR(nvOCDRParam param):
     mOCDNet = std::move(std::unique_ptr<OCDNetEngine>(new OCDNetEngine(ocd_engine_path,
                                                                        param.ocdnet_binarize_threshold,
                                                                        param.ocdnet_polygon_threshold,
-                                                                       param.ocdnet_upclip_ratio,
+                                                                       param.ocdnet_unclip_ratio,
                                                                        param.ocdnet_max_candidate,
                                                                        isNHWC)));
     // Init input and output buffer for OCDNet TRT inference:
