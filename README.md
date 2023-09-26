@@ -47,7 +47,7 @@ cd onnx_models
 # Download OCDnet onnx
 wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v1.0/files?redirect=true&path=dcn_resnet18.onnx' -O dcn_resnet18.onnx
 
-mv dcn_resnet18.onnxocdnet.onnx
+mv dcn_resnet18.onnx ocdnet.onnx
 
 # Download OCRnet onnx
 wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
