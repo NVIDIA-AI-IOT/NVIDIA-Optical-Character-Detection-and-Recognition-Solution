@@ -37,7 +37,28 @@ We suggest to start from TensorRT container:
     ```
 
 #### **Prepare the OCDNet and OCRNet model**:
-And then you could dowload the pretrained models of [OCDNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocdnet) and [OCRNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocrnet) or train your own model (Please ref to TAO Toolkit documentation for how to train your own [OCDNet](https://docs.nvidia.com/tao/tao-toolkit/text/object_detection/ocd.html) and [OCRNet](https://docs.nvidia.com/tao/tao-toolkit/text/character_recognition/ocrnet.html). And there will be a vocabulary list named `character_list.txt` of OCRNet model when you download the PTM from NGC. 
+And then you could dowload the pretrained models of [OCDNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocdnet) and [OCRNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocrnet) with following instructions or train your own model (Please ref to TAO Toolkit documentation for how to train your own [OCDNet](https://docs.nvidia.com/tao/tao-toolkit/text/object_detection/ocd.html) and [OCRNet](https://docs.nvidia.com/tao/tao-toolkit/text/character_recognition/ocrnet.html). And there will be a vocabulary list named `character_list.txt` of OCRNet model when you download the PTM from NGC. 
+
+- download the onnx models of OCDnet and OCRnet
+```
+mkdir onnx_models
+cd onnx_models
+
+# Download OCDnet onnx
+wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v1.0/files?redirect=true&path=dcn_resnet18.onnx' -O dcn_resnet18.onnx
+
+mv dcn_resnet18.onnxocdnet.onnx
+
+# Download OCRnet onnx
+wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
+
+mv ocrnet_resnet50.onnx ocrnet.onnx
+
+# Download OCRnet character_list
+wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=character_list' -O character_list
+
+mv character_list character_list.txt
+```
 
 #### **Compile the TensorRT OSS plugin libray (Optional)**:
 

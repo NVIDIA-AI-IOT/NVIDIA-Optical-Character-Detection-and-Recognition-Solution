@@ -5,14 +5,32 @@
   git clone https://github.com/NVIDIA-AI-IOT/NVIDIA-Optical-Character-Detection-and-Recognition-Solution.git && \
   cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution/triton
   ```
+
+- download the onnx models of OCDnet and OCRnet
+  ```
+  mkdir onnx_models
+  cd onnx_models
+
+  # Download OCDnet onnx
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v1.0/files?redirect=true&path=dcn_resnet18.onnx' -O dcn_resnet18.onnx
+
+  # Download OCRnet onnx
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
+
+  # Download OCRnet character_list
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=character_list' -O character_list
+  ```
+
 - Build Triton Server docker images
 
  
     ```
-    bash setup_triton_server.sh [OCD input height] [OCD input width] [OCD input max batchsize] [DEVICE] [ocd onnx path> [ocr onnx path] [ocr character list path]
+    cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution/triton
+    
+    bash setup_triton_server.sh [OCD input height] [OCD input width] [OCD input max batchsize] [DEVICE] [ocd onnx path] [ocr onnx path] [ocr character list path]
 
     # For example
-    bash setup_triton_server.sh 736 1280 4 0 model/ocd.onnx model/ocr.onnx model/ocr_character_list
+    bash setup_triton_server.sh 736 1280 4 0 onnx_models/dcn_resnet18.onnx onnx_models/ocrnet_resnet50.onnx onnx_models/character_list
     ```
 
 - Build Triton Client docker images
