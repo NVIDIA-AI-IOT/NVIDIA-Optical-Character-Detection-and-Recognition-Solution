@@ -90,7 +90,7 @@ class TritonPythonModel:
         self.ocdnet_infer_input_shape = configs['ocdnet_infer_input_shape']
         param.ocdnet_binarize_threshold = configs['ocdnet_binarize_threshold']
         param.ocdnet_polygon_threshold = configs['ocdnet_polygon_threshold']
-        param.ocdnet_upclip_ratio = configs['ocdnet_upclip_ratio']
+        param.ocdnet_unclip_ratio = configs['ocdnet_unclip_ratio']
         param.ocdnet_max_candidate = configs['ocdnet_max_candidate']
         param.upsidedown = configs['upsidedown']
         self.ocrnet_trt_engine_path = configs['ocrnet_trt_engine_path']

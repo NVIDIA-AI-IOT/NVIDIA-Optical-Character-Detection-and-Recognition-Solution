@@ -39,7 +39,7 @@ typedef struct
   char* ocdnet_trt_engine_path;
   float ocdnet_binarize_threshold;
   float ocdnet_polygon_threshold;
-  float ocdnet_upclip_ratio;
+  float ocdnet_unclip_ratio;
   int ocdnet_max_candidate;
   int32_t ocdnet_infer_input_shape[3];
   // Rectifier param
