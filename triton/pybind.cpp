@@ -124,7 +124,7 @@ PYBIND11_MODULE(nvocdr, m) {
         .def(py::init<>())
         .def_readwrite("ocdnet_binarize_threshold", &nvOCDRParam::ocdnet_binarize_threshold)
         .def_readwrite("ocdnet_polygon_threshold", &nvOCDRParam::ocdnet_polygon_threshold)
-        .def_readwrite("ocdnet_upclip_ratio", &nvOCDRParam::ocdnet_upclip_ratio)
+        .def_readwrite("ocdnet_unclip_ratio", &nvOCDRParam::ocdnet_unclip_ratio)
         .def_readwrite("ocdnet_max_candidate", &nvOCDRParam::ocdnet_max_candidate)
         .def_readwrite("upsidedown", &nvOCDRParam::upsidedown)
         .def_readwrite("input_data_format", &nvOCDRParam::input_data_format)
