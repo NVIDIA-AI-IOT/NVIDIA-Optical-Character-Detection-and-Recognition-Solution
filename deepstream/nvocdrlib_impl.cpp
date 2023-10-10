@@ -153,6 +153,7 @@ public:
   std::string m_OCRNetEnginePath;
   std::string m_OCRNetDictPath;
   std::vector<int> m_OCRNetInferShape;
+  OCRNetDecode m_OCRNetDecode = CTC;
   void* m_interbuffer = nullptr;
 
   nvOCDRp m_nvOCDRLib;
@@ -277,6 +278,7 @@ bool nvOCDRAlgorithm::SetInitParams(DSCustom_CreateParams *params)
   param.upsidedown = m_RectUpsideDown;
   param.ocrnet_trt_engine_path = (char *)m_OCRNetEnginePath.c_str();
   param.ocrnet_dict_file = (char *)m_OCRNetDictPath.c_str();
+  param.ocrnet_decode = m_OCRNetDecode;
   param.ocrnet_infer_input_shape[0] = m_OCRNetInferShape[0];
   param.ocrnet_infer_input_shape[1] = m_OCRNetInferShape[1];
   param.ocrnet_infer_input_shape[2] = m_OCRNetInferShape[2];
@@ -435,6 +437,7 @@ char *nvOCDRAlgorithm::QueryProperties ()
             "\n\t\t\tcustomlib-props=\"overlap-ratio:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-engine-path:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-dict-path:x\""
+            "\n\t\t\tcustomlib-props=\"ocrnet-decode:x\""
             "\n\t\t\tcustomlib-props=\"ocrnet-input-shape:x,y,z\"");
     return str;
 }
@@ -503,6 +506,24 @@ bool nvOCDRAlgorithm::SetProperty(Property &prop)
       if (prop.key.compare("ocrnet-dict-path") == 0)
       {
           m_OCRNetDictPath.assign(prop.value);
+      }
+      if (prop.key.compare("ocrnet-decode") == 0)
+      {
+          std::string decode_mode;
+          decode_mode.assign(prop.value);
+          if (decode_mode == "CTC")
+          {
+            m_OCRNetDecode = CTC;
+          }
+          else if (decode_mode == "Attention")
+          {
+            m_OCRNetDecode = Attention;
+          }
+          else
+          {
+            printf("ocrnet-decode should be in [CTC, Attention]");
+            exit(1);
+          }
       }
       if (prop.key.compare("ocrnet-input-shape") == 0)
       {
@@ -644,18 +665,6 @@ gboolean nvds_add_ocdr_meta(NvDsBatchMeta *batch_meta, nvOCDROutputMeta &output)
       text_params.font_params.font_size = 11;
       text_params.font_params.font_color = (NvOSD_ColorParams) {
       1, 1, 1, 1};
-
-      #if DEBUG
-      char outname[256] = "infer_output.txt";
-      FILE* fp = fopen(outname, "a");
-      if(fp)
-      {
-        fprintf (fp, "text: [%s]  conf: [%f] bbox: [l:%f t:%f w:%f h:%f]\n",
-            text_params.display_text, output_blob.conf, rect_params.left, rect_params.top, rect_params.width,
-            rect_params.height);
-        fclose(fp);
-      }
-      #endif
 
       // @TODO(tylerz): currently set parent_obj_meta to be NULL
       nvds_add_obj_meta_to_frame (frame_meta, obj_meta, NULL);

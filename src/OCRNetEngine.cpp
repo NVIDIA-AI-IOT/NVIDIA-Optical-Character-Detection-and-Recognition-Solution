@@ -6,7 +6,7 @@
 using namespace nvocdr;
 
 
-OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& dict_path, const bool upside_down)
+OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& dict_path, const bool upside_down, const DecodeMode decode_mode)
 {
     // Init TRTEngine
     mEngine = std::move(std::unique_ptr<TRTEngine>(new TRTEngine(engine_path)));
@@ -18,7 +18,17 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         std::cerr << "[ERROR] Error reading OCRNet dict file " << dict_path << std::endl;
     }
     mDict.clear();
-    mDict.emplace_back("CTCBlank");
+    mDecodeMode = decode_mode;
+    if (mDecodeMode == CTC)
+    {
+        mDict.emplace_back("CTCBlank");
+    }
+    else
+    {
+        mDict.emplace_back("[GO]");
+        mDict.emplace_back("[s]");
+    };
+
     while(!dict_file.eof())
     {
         std::string ch;
@@ -107,39 +117,65 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
     cudaStreamSynchronize(stream);
 
     std::vector<std::pair<std::string, float>> temp_de_texts;
-    for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
+    if (mDecodeMode == CTC)
     {
-        int b_offset = batch_idx * output_len; 
-        int prev = output_id[b_offset];
-        std::vector<int> temp_seq_id = {prev};
-        std::vector<float> temp_seq_prob = {output_prob[b_offset]};
-        for(int i = 1 ; i < output_len; ++i)
+        for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
         {
-            if (output_id[b_offset + i] != prev)
+            int b_offset = batch_idx * output_len; 
+            int prev = output_id[b_offset];
+            std::vector<int> temp_seq_id = {prev};
+            std::vector<float> temp_seq_prob = {output_prob[b_offset]};
+            for(int i = 1 ; i < output_len; ++i)
             {
-                temp_seq_id.push_back(output_id[b_offset + i]);
-                temp_seq_prob.push_back(output_prob[b_offset + i]);
-                prev = output_id[b_offset + i];
-            }
-        }
-        std::string de_text = "";
-        float prob = 1.0;
-        for(size_t i = 0; i < temp_seq_id.size(); ++i)
-        {
-            if (temp_seq_id[i] != 0)
-            {
-                if (temp_seq_id[i] <= static_cast<int>(mDict.size()) - 1)
+                if (output_id[b_offset + i] != prev)
                 {
-                    de_text += mDict[temp_seq_id[i]];
-                    prob *= temp_seq_prob[i];
+                    temp_seq_id.push_back(output_id[b_offset + i]);
+                    temp_seq_prob.push_back(output_prob[b_offset + i]);
+                    prev = output_id[b_offset + i];
+                }
+            }
+            std::string de_text = "";
+            float prob = 1.0;
+            for(size_t i = 0; i < temp_seq_id.size(); ++i)
+            {
+                if (temp_seq_id[i] != 0)
+                {
+                    if (temp_seq_id[i] <= static_cast<int>(mDict.size()) - 1)
+                    {
+                        de_text += mDict[temp_seq_id[i]];
+                        prob *= temp_seq_prob[i];
+                    }
+                    else
+                    {
+                        std::cerr << "[ERROR] Character dict is not compatible with OCRNet TRT engine." << std::endl;
+                    }
+                }
+            }
+            temp_de_texts.emplace_back(std::make_pair(de_text, prob));
+        }
+    }
+    else
+    {
+        for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
+        {
+            int b_offset = batch_idx * output_len;
+            int stop_idx = 0;
+            std::string de_text = "";
+            float prob = 1.0;
+            for(int i = 0; i < output_len; ++i)
+            {
+                if (mDict[output_id[b_offset + i]] != "[s]")
+                {
+                    de_text += mDict[output_id[b_offset + i]];
+                    prob *= output_prob[b_offset + i];
                 }
                 else
                 {
-                    std::cerr << "[ERROR] Character dict is not compatible with OCRNet TRT engine." << std::endl;
+                    break;
                 }
             }
+            temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
-        temp_de_texts.emplace_back(std::make_pair(de_text, prob));
     }
 
     int stride = batch_size / 2;

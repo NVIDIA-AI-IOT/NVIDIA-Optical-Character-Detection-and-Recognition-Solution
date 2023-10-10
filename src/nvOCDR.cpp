@@ -278,12 +278,18 @@ nvOCDR::nvOCDR(nvOCDRParam param):
 
     bool upsidedown = param.upsidedown;
 
+    DecodeMode decode_mode;
+    if (param.ocrnet_decode == OCRNetDecode::CTC)
+        decode_mode = DecodeMode::CTC;
+    else
+        decode_mode = DecodeMode::Attention;
     // Init ocrnet
     std::string ocr_engine_path(param.ocrnet_trt_engine_path);
     std::string ocr_dict_path(param.ocrnet_dict_file);
     mOCRNet = std::move(std::unique_ptr<OCRNetEngine>(new OCRNetEngine(ocr_engine_path,
                                                                        ocr_dict_path,
-                                                                       upsidedown)));
+                                                                       upsidedown,
+                                                                       decode_mode)));
     // Init input and output buffer for OCRNet TRT inference
     mOCRNet->initTRTBuffer(mBuffMgr);
     mOCRNetInputShape.nbDims=4;
