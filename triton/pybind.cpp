@@ -120,6 +120,11 @@ PYBIND11_MODULE(nvocdr, m) {
         .value("NHWC", DataFormat::NHWC)
         .export_values();
 
+    py::enum_<OCRNetDecode>(m, "OCRNetDecode")
+        .value("CTC", OCRNetDecode::CTC)
+        .value("Attention", OCRNetDecode::Attention)
+        .export_values();
+
     py::class_<nvOCDRParam>(m, "nvOCDRParam")
         .def(py::init<>())
         .def_readwrite("ocdnet_binarize_threshold", &nvOCDRParam::ocdnet_binarize_threshold)
@@ -128,6 +133,7 @@ PYBIND11_MODULE(nvocdr, m) {
         .def_readwrite("ocdnet_max_candidate", &nvOCDRParam::ocdnet_max_candidate)
         .def_readwrite("upsidedown", &nvOCDRParam::upsidedown)
         .def_readwrite("input_data_format", &nvOCDRParam::input_data_format)
+        .def_readwrite("ocrnet_decode", &nvOCDRParam::ocrnet_decode)
         ;
 
      py::class_<Polygon>(m, "Polygon")

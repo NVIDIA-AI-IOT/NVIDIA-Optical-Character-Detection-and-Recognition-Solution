@@ -32,6 +32,12 @@ enum DataFormat
   NHWC
 };
 
+enum OCRNetDecode
+{
+  CTC,
+  Attention
+};
+
 typedef struct
 {
   DataFormat input_data_format;
@@ -48,6 +54,7 @@ typedef struct
   char* ocrnet_trt_engine_path;
   char* ocrnet_dict_file;
   int32_t ocrnet_infer_input_shape[3];
+  OCRNetDecode ocrnet_decode = CTC;
   // common param
 
 } nvOCDRParam;

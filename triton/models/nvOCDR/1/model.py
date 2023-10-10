@@ -93,6 +93,7 @@ class TritonPythonModel:
         param.ocdnet_unclip_ratio = configs['ocdnet_unclip_ratio']
         param.ocdnet_max_candidate = configs['ocdnet_max_candidate']
         param.upsidedown = configs['upsidedown']
+        param.ocrnet_decode = OCRNetDecode.Attention if configs["ocrnet_decode"] == "Attention" else OCRNetDecode.CTC
         self.ocrnet_trt_engine_path = configs['ocrnet_trt_engine_path']
         self.ocrnet_dict_file = configs['ocrnet_dict_file']
         self.ocrnet_infer_input_shape = configs['ocrnet_infer_input_shape']
