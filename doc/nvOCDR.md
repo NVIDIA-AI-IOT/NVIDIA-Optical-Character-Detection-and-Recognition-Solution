@@ -33,6 +33,12 @@ The input data format.
 |`NHWC`|The data is stored in shape [batch, height, width, channel]|
 
 **Notes**: Only supports NHWC input now.
+### `OCRNetDecode`
+The decode method of OCRNet.
+|Value|Description|
+|:---|:---|
+|`CTC`|Decode the OCRNet output following CTC rules|
+|`Attention`|Decode the OCRNet with attention module|
 ## nvOCDR meta struct
 
 ### `nvOCDRParam`
@@ -43,12 +49,14 @@ The parameters to initialize nvOCDR library.
 |`ocdnet_trt_engine_path`|`char*`|The absolute path to the OCDNet TensorRT engine|
 |`ocdnet_binarize_threshold`|`float`|The threshold value to binarize the OCDNet's output mask|
 |`ocdnet_polygon_threshold`|`float`|The threshold value to filter the polygons based on the confidence score. The confidence score of a polygon is the average value of every pixel's probability in the polygon mask|
+|`ocdnet_unclip_ratio`|`float`| The ratio to unclip the contours of text areas|
 |`ocdnet_max_candidate`|`int`|The maximum number of text area to be produced in one single image from OCDNet|
 |`ocdnet_infer_input_shape`|`int32_t[3]`| The TensorRT engine inference shape of OCDNet. In `CHW` order |
 |`upsidedown`|`bool`|Enable the nvOCDR to recognize the character that is totally upsidedown|
 |`ocrnet_trt_engine_path`|`char*`|The absolute path to the OCRNet TensorRT engine|
 |`ocrnet_dict_file`|`char*`| The absolute path to the OCRNet character list file|
 |`ocrnet_infer_input_shape`|`int32_t[3]`| The TensorRT engine inference shape of OCRNet. In `CHW` order |
+|`ocrnet_decode`|`OCRNetDecode`| The decode method of OCRNet|
 
 ### `nvOCDRInput`
 The input data structure of nvOCDR. All the data feed into the library should be wrapped in this struct.
@@ -96,6 +104,17 @@ The function to do OCR. It takes batch images data on GPU as input and store the
 |`input`|`nvOCDRInput`|The parameters to initialize nvOCDR library|
 |`output`|`nvOCDROutputMeta*`|The pointer to the output struct|
 |`nvocdr_ptr`|`nvOCDRp`| The handle of nvOCDR library|
+
+
+### `nvOCDRStat nvOCDR_high_resolution_inference(nvOCDRInput input, nvOCDROutputMeta* output, nvOCDRp nvocdr_ptr, float overlap_rate)`
+The function to do OCR for high resolution input with a crop-based inference scheme. It takes batch images data on GPU as input and store the polygons and texts in the `output` of those images. The high resolution input will be cropped to patches with shape of OCDNet input. And then the OCR pipeline will be done on the cropped patches.
+
+|Parameter|Type|Description|
+|:---|:---|:---|
+|`input`|`nvOCDRInput`|The parameters to initialize nvOCDR library|
+|`output`|`nvOCDROutputMeta*`|The pointer to the output struct|
+|`nvocdr_ptr`|`nvOCDRp`| The handle of nvOCDR library|
+|`overlap_rate`|`float`| The overlap ratio of cropped patches|
 
 ### `void nvOCDR_deinit(nvOCDRp nvocdr_ptr)`
 The function to destroy the nvOCDR library resources when you don't need the library.
