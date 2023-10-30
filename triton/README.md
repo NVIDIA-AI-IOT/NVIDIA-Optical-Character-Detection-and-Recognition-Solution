@@ -3,7 +3,7 @@
 - clone the repository
   ```
   git clone https://github.com/NVIDIA-AI-IOT/NVIDIA-Optical-Character-Detection-and-Recognition-Solution.git && \
-  cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution/triton
+  cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution
   ```
 
 - download the onnx models of OCDnet and OCRnet
@@ -27,10 +27,10 @@
     ```
     cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution/triton
     
-    bash setup_triton_server.sh [OCD input height] [OCD input width] [OCD input max batchsize] [DEVICE] [ocd onnx path] [ocr onnx path] [ocr character list path]
+    bash setup_triton_server.sh [ocd onnx path] [ocr onnx path] [ocr character list path]
 
     # For example
-    bash setup_triton_server.sh 736 1280 4 0 onnx_models/dcn_resnet18.onnx onnx_models/ocrnet_resnet50.onnx onnx_models/character_list
+    bash setup_triton_server.sh onnx_models/dcn_resnet18.onnx onnx_models/ocrnet_resnet50.onnx onnx_models/character_list
     ```
 
 - Build Triton Client docker images
@@ -40,6 +40,14 @@
 - Start a triton server container
     ```
     docker run -it --rm --net=host --gpus all --shm-size 8g nvcr.io/nvidian/tao/nvocdr_triton_server:v1.0 bash
+
+    # build the tensorRT engine for OCDNet and OCRnet
+    cd /opt/nvocdr/ocdr/triton
+
+    bash build_engine.sh [OCD input height] [OCD input width] [OCD input max batchsize] [DEVICE]
+
+    # For example
+    bash build_engine.sh 736 1280 4 0
 
     CUDA_VISIBLE_DEVICES=<gpu idx> tritonserver --model-repository /opt/nvocdr/ocdr/triton/models/
     ```
@@ -54,8 +62,15 @@
 
       
 - Start a triton client container
+
+  To speed up processing images in client, it's recommended that user can run this client container in a machine with GPU, then nvJpeg lib will be used to accelerate the image processing. User can run this client container in a machine without GPU as well. 
+  
   ```
+  # if you are using a machine without GPU 
   docker run -it --rm -v <path to images dir>:<path to images dir>  --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v1.0 bash
+
+  # if you are using a machine which does have a GPU 
+  docker run -it --rm -v <path to images dir>:<path to images dir> --gpus all --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v1.0 bash
 
   python3 client.py -d <path to images dir> -bs 1
   ```

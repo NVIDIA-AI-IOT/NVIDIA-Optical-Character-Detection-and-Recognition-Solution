@@ -32,6 +32,11 @@ import argparse
 from nvjpeg import NvJpeg
 import cv2
 
+try:
+    import pycuda.driver as cuda
+    has_gpu = True
+except ImportError:
+    has_gpu = False
 
 def readImageOpenCV(imgPath):
     img = cv2.imread(imgPath)
@@ -109,24 +114,27 @@ if __name__ == "__main__":
         print(f"[WARNING] The images number {len(imgPaths)} isn't evenly divisible by batchSize {batchSize}, will repreate the last image to satify the batch size.")
         imgPaths += [imgPaths[-1]] * ((inferTimes+1)*batchSize - len(imgPaths))
 
-    resultPath = os.path.join(args.imagesDir, 'results')
+    resultPath = os.path.join(args.imagesDir, '../nvocdr_results')
     if not os.path.isdir(resultPath):
         os.makedirs(resultPath,exist_ok=True)
 
     imgData = []
     batchImgExt = []
-    nj = NvJpeg()
+    if has_gpu:
+        nj = NvJpeg()
 
     for i, imgPath in enumerate(imgPaths):
         imgExt = os.path.splitext(imgPath)[-1]
-        batchImgExt.append(imgExt)
-        if imgExt in ['.jpg', '.jpeg']:
+        
+        if imgExt in ['.jpg', '.jpeg'] and has_gpu:
             img = nj.read(imgPath)
             img_encode = nj.encode(img)
+            batchImgExt.append(f'{imgExt}_gpu')
         else:
             img = cv2.imread(imgPath)
             img_encode = cv2.imencode(imgExt, img)[1].tobytes()
-        
+            batchImgExt.append(imgExt)
+
         print(f'[nvOCDR] Processing for: {imgPath}, image size: {img.shape}')
 
         imgData.append(img_encode)
@@ -141,14 +149,24 @@ if __name__ == "__main__":
                                         outputs=outputs)
 
             output0_data = results.as_numpy(output_img_name)
-            output0_data = [nj.decode(output0_data[i][0]) for i in range(len(output0_data))]
-
+            output_vis_images = []
+            for output_idx in range(len(output0_data)):
+                if batchImgExt[output_idx] in ['.jpg_gpu', '.jpeg_gpu'] and has_gpu:
+                    output_img_decode = nj.decode(output0_data[output_idx][0]) 
+                else:
+                    buff = np.frombuffer(output0_data[output_idx][0], np.uint8)
+                    buff = buff.reshape(1, -1)
+                    output_img_decode = cv2.imdecode(buff, cv2.IMREAD_COLOR)
+                output_vis_images.append(output_img_decode)
             predict_text_box = results.as_numpy(output_predicts)
             predict_text_box = list(map(lambda x:x[0].decode("utf-8"), predict_text_box))
             predict_text_box_decode = [json.loads(predict) for predict in predict_text_box]
-            for k, output in enumerate(output0_data):
+            for k, output in enumerate(output_vis_images):
                 outputImgPath =  os.path.join(resultPath, os.path.basename( imgPaths[int(i/batchSize)*batchSize + k] + '_nvocdr_vis.jpg'))
-                nj.write(outputImgPath, output)
+                if has_gpu:
+                    nj.write(outputImgPath, output)
+                else:
+                    cv2.imwrite(outputImgPath,output)
 
                 outputTextBoxPath = os.path.join(resultPath, os.path.basename( imgPaths[int(i/batchSize)*batchSize + k] + '_nvocdr_text_boxes.txt'))
                 with open(outputTextBoxPath,'w', encoding='utf-8') as f:
