@@ -23,15 +23,6 @@ RUN wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorr
     dpkg-deb  -xv libnvinfer-plugin8_8.6.0.12-1+cuda11.8_amd64.deb deb_file && \
     cp deb_file/usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so.8.6.0  /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so.8.5.3
     
-# step4: build trt engines
-ARG OCD_H=736
-ARG OCD_W=1280
-ARG OCD_MAX_BS=4
-ARG DEVICE=0
-
-RUN mkdir -p /opt/nvocdr/engines 
-RUN /usr/src/tensorrt/bin/trtexec --device=${DEVICE} --onnx=/opt/nvocdr/onnx_model/ocdnet.onnx --minShapes=input:1x3x${OCD_H}x${OCD_W} --optShapes=input:${OCD_MAX_BS}x3x${OCD_H}x${OCD_W} --maxShapes=input:${OCD_MAX_BS}x3x${OCD_H}x${OCD_W} --fp16 --saveEngine=/opt/nvocdr/engines/ocdnet.fp16.engine
-RUN /usr/src/tensorrt/bin/trtexec --device=${DEVICE} --onnx=/opt/nvocdr/onnx_model/ocrnet.onnx --minShapes=input:1x1x32x100 --optShapes=input:1x1x32x100 --maxShapes=input:32x1x32x100 --fp16 --saveEngine=/opt/nvocdr/engines/ocrnet.fp16.engine
 
 # step5: install opencv
 RUN apt-get update && apt-get install libgl1-mesa-glx --yes && apt-get install libopencv-dev --yes
@@ -45,11 +36,6 @@ RUN cd /opt/nvocdr/ocdr/triton && \
     python3 -m pip install -r requirements-pip.txt
 
 
-# change the ocd input size in spec.json
-ENV OCD_INPUT_H=${OCD_H}
-ENV OCD_INPUT_W=${OCD_W}
-RUN sed -i "s|OCD_INPUT_H|${OCD_INPUT_H}|g" /opt/nvocdr/ocdr/triton/models/nvOCDR/spec.json && \
-    sed -i "s|OCD_INPUT_W|${OCD_INPUT_W}|g" /opt/nvocdr/ocdr/triton/models/nvOCDR/spec.json
 
 # step7: build nvocdr lib    
 RUN cd /opt/nvocdr/ocdr/triton && make -j8

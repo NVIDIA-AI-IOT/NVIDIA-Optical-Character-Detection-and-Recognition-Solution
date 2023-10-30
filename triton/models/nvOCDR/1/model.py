@@ -149,7 +149,7 @@ class TritonPythonModel:
             img_extensions = list(map(lambda x:x[0].decode("utf-8"), np_ext_buffer))
 
             for i in range(np_buffer.shape[0]):
-                if img_extensions[i] in ['.jpg', '.jpeg']:
+                if img_extensions[i] in ['.jpg_gpu', '.jpeg_gpu']:
                     img_decode = self.nj.decode(np_buffer[i][0])
                 else:
                     buff = np.fromstring(np_buffer[i][0], np.uint8)
@@ -167,7 +167,13 @@ class TritonPythonModel:
             print(f"[nvOCDR] Infer done, got {sum([len(r) for r in results])} texts ")
 
             results_img, results_encode = self.ocdrProcess.postprocess(oriImgs, results, new_w ,new_h)
-            output = [self.nj.encode(res) for res in results_img]
+            output = []
+            for img_idx, res in enumerate(results_img):
+                if img_extensions[img_idx] in ['.jpg_gpu', '.jpeg_gpu']:
+                    res_img_encode = self.nj.encode(res)
+                else:
+                    res_img_encode = cv2.imencode(img_extensions[img_idx], res)[1].tobytes()
+                output.append(res_img_encode)
             text = np.array(output).reshape(len(results),-1)
 
             results_encode = np.array(list(map(lambda x: x.encode("utf-8") , results_encode)),dtype=np.object_).reshape(len(results),-1)
