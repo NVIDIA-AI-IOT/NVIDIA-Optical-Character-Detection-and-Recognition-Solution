@@ -29,11 +29,11 @@ import numpy as np
 import json
 import tritongrpcclient
 import argparse
-from nvjpeg import NvJpeg
 import cv2
 
 try:
     import pycuda.driver as cuda
+    from nvjpeg import NvJpeg
     has_gpu = True
 except ImportError:
     has_gpu = False
