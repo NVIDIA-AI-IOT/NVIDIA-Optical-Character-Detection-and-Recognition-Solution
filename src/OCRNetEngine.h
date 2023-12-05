@@ -10,10 +10,18 @@
 using namespace nvinfer1;
 namespace nvocdr
 {
+
+enum DecodeMode
+{
+    CTC,
+    Attention
+};
+
 class OCRNetEngine
 {
     public:
-        OCRNetEngine(const std::string& engine_path, const std::string& dict_path, const bool upside_down=0);
+        OCRNetEngine(const std::string& engine_path, const std::string& dict_path,
+                     const bool upside_down=0, const DecodeMode decode_mode=CTC);
         ~OCRNetEngine();
 
         bool initTRTBuffer(BufferManager& buffer_mgr);
@@ -30,6 +38,7 @@ class OCRNetEngine
         std::unique_ptr<TRTEngine> mEngine;
         std::vector<std::string> mDict;
         bool mUDFlag;
+        DecodeMode mDecodeMode;
 
         // int mDecodeOutputBufferIndex;
 };
