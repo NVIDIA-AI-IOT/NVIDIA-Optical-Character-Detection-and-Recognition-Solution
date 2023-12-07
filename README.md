@@ -198,9 +198,33 @@ For more information on how to use nvOCDR in DeepStream, see the [documentation]
 
 For more information on how to use nvOCDR in Triton, see the [documentation](./triton/README.md).
 
+### Use OCRNet with attention module
+
+The ViT-based OCRNet models released on [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocrnet) (**deployable 2.0** and **deployable 2.1**) come with attention module which require attention decoding method. One can enable attention decoding by the following steps:
+
+- In C++ application:
+
+    ```c++
+    nvOCDRParam param;
+    param.ocrnet_decode = Attention;
+    ```
+
+- In DeepStream:
+
+    ```shell
+    customlib-props="ocrnet-decode: Attention"
+    ```
+
+- In Triton (in `models/nvOCDR/spec.json`):
+
+    ```json
+    "ocrnet-decode": "Attention"
+    ```
+
 ### API Reference
 
 For more information about nvOCDR API, see the [API reference](doc/nvOCDR.md)
+
 
 ## License
 
