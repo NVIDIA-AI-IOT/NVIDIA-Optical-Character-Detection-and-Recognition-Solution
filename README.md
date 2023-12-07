@@ -212,7 +212,7 @@ The ViT-based OCRNet models released on [NGC](https://catalog.ngc.nvidia.com/org
 - In DeepStream:
 
     ```shell
-    customlib-props="ocrnet-decode: Attention"
+    customlib-props="ocrnet-decode:Attention"
     ```
 
 - In Triton (in `models/nvOCDR/spec.json`):
