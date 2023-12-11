@@ -2,23 +2,22 @@
 
 - clone the repository
   ```
-  git clone https://github.com/NVIDIA-AI-IOT/NVIDIA-Optical-Character-Detection-and-Recognition-Solution.git && \
-  cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution
+  git clone https://github.com/NVIDIA-AI-IOT/NVIDIA-Optical-Character-Detection-and-Recognition-Solution.git 
   ```
 
 - download the onnx models of OCDnet and OCRnet
   ```
-  mkdir onnx_models
-  cd onnx_models
+  mkdir NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models
+  cd NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models
 
-  # Download OCDnet onnx
-  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v1.0/files?redirect=true&path=dcn_resnet18.onnx' -O dcn_resnet18.onnx
+  # Download OCDNet-ViT onnx
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v2.0/files?redirect=true&path=ocdnet_fan_tiny_2x_icdar.onnx' -O ocdnet_fan_tiny_2x_icdar.onnx
 
-  # Download OCRnet onnx
-  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
+  # Download OCRNet-ViT onnx
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=ocrnet-vit.onnx' -O ocrnet-vit.onnx
 
   # Download OCRnet character_list
-  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=character_list' -O character_list
+  wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=character_list' -O character_list
   ```
 
 - Build Triton Server docker images
@@ -30,24 +29,25 @@
     bash setup_triton_server.sh [ocd onnx path] [ocr onnx path] [ocr character list path]
 
     # For example
-    bash setup_triton_server.sh onnx_models/dcn_resnet18.onnx onnx_models/ocrnet_resnet50.onnx onnx_models/character_list
+    bash setup_triton_server.sh ../onnx_models/ocdnet_fan_tiny_2x_icdar.onnx ../onnx_models/ocrnet-vit.onnx ../onnx_models/character_list
     ```
 
 - Build Triton Client docker images
   ```
   bash setup_triton_client.sh
   ```
-- Start a triton server container
+- Start a triton server container  
+    __Note:  ocdnet_fan_tiny_2x_icdar.onnx only support batch size 1__
     ```
-    docker run -it --rm --net=host --gpus all --shm-size 8g nvcr.io/nvidian/tao/nvocdr_triton_server:v1.0 bash
+    docker run -it --rm --net=host --gpus all --shm-size 8g nvcr.io/nvidian/tao/nvocdr_triton_server:v2.0 bash
 
     # build the tensorRT engine for OCDNet and OCRnet
     cd /opt/nvocdr/ocdr/triton
 
-    bash build_engine.sh [OCD input height] [OCD input width] [OCD input max batchsize] [DEVICE]
+    bash build_engine.sh [OCD input height] [OCD input width] [OCD input max batchsize] [GPU idx]
 
-    # For example
-    bash build_engine.sh 736 1280 4 0
+    # OCDNet-ViT onnx model only support batch_size=1, For example
+    bash build_engine.sh 736 1280 1 0
 
     CUDA_VISIBLE_DEVICES=<gpu idx> tritonserver --model-repository /opt/nvocdr/ocdr/triton/models/
     ```
@@ -67,10 +67,10 @@
   
   ```
   # if you are using a machine without GPU 
-  docker run -it --rm -v <path to images dir>:<path to images dir>  --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v1.0 bash
+  docker run -it --rm -v <path to images dir>:<path to images dir>  --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v2.0 bash
 
   # if you are using a machine which does have a GPU 
-  docker run -it --rm -v <path to images dir>:<path to images dir> --gpus all --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v1.0 bash
+  docker run -it --rm -v <path to images dir>:<path to images dir> --gpus all --net=host nvcr.io/nvidian/tao/nvocdr_triton_client:v2.0 bash
 
   python3 client.py -d <path to images dir> -bs 1
   ```
