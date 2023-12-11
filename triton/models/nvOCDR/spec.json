@@ -4,7 +4,7 @@
 
     "overlapRate": 0.5,
     "input_data_format": "NHWC",
-    "ocdnet_trt_engine_path": "/opt/nvocdr/engines/ocdnet.fp16.engine",
+    "ocdnet_trt_engine_path": "/opt/nvocdr/engines/ocdnet_vit.fp16.engine",
     "ocdnet_infer_input_shape": [
         3,
         OCD_INPUT_H,
@@ -15,12 +15,13 @@
     "ocdnet_unclip_ratio": 1.5,
     "ocdnet_max_candidate": 1000,
     "upsidedown": true,
-    "ocrnet_trt_engine_path": "/opt/nvocdr/engines/ocrnet.fp16.engine",
+    "ocrnet_trt_engine_path": "/opt/nvocdr/engines/ocrnet_vit.fp16.engine",
     "ocrnet_dict_file": "/opt/nvocdr/onnx_model/character_list",
+    "ocrnet_decode": "Attention", 
     "ocrnet_infer_input_shape": [
         1,
-        32,
-        100
+        64,
+        200
     ],
     "font_size": 0.6,
     "font_color": [0,0,255]
