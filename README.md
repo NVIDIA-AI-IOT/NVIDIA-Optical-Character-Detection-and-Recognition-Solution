@@ -15,7 +15,7 @@ Whether you are building a surveillance system, a traffic monitoring application
 ## Installation
 ### Prerequisites
 - CUDA 11.4 or above
-- TensorRT 8.5 or above
+- TensorRT 8.5 or above (To use ViT-based model, TensorRT 8.6 above is required.)
 - OpenCV 4.0 or above
 - Jetpack 5.1 or above on Jetson devices
 - Pretrained OCDNet and OCRNet model
@@ -25,7 +25,7 @@ We suggest to start from TensorRT container:
 
 - On X86 platform:
     ```shell
-    docker run --gpus=all -v <work_path>:<work_path> --rm -it --privileged --net=host nvcr.io/nvidia/tensorrt:22.11-py3 bash
+    docker run --gpus=all -v <work_path>:<work_path> --rm -it --privileged --net=host nvcr.io/nvidia/tensorrt:23.11-py3 bash
     # install opencv
     apt update && apt install -y libopencv-dev
     ```
@@ -40,7 +40,7 @@ We suggest to start from TensorRT container:
 And then you could dowload the pretrained models of [OCDNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocdnet) and [OCRNet](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/ocrnet) with following instructions or train your own model (Please ref to TAO Toolkit documentation for how to train your own [OCDNet](https://docs.nvidia.com/tao/tao-toolkit/text/object_detection/ocd.html) and [OCRNet](https://docs.nvidia.com/tao/tao-toolkit/text/character_recognition/ocrnet.html). And there will be a vocabulary list named `character_list.txt` of OCRNet model when you download the PTM from NGC. 
 
 - download the onnx models of OCDnet and OCRnet
-```
+```shell
 mkdir onnx_models
 cd onnx_models
 
@@ -58,6 +58,17 @@ mv ocrnet_resnet50.onnx ocrnet.onnx
 wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=character_list' -O character_list
 
 mv character_list character_list.txt
+
+# # Download command for ViT-based models:
+# # Download OCDNet-ViT onnx
+# wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v2.0/files?redirect=true&path=ocdnet_fan_tiny_2x_icdar.onnx' -O ocdnet_fan_tiny_2x_icdar.onnx
+
+# # Download OCRNet-ViT onnx
+# wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=ocrnet-vit.onnx' -O ocrnet-vit.onnx
+
+# # Download OCRnet character_list
+# wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=character_list' -O character_list
+
 ```
 
 #### **Compile the TensorRT OSS plugin libray (Optional)**:
@@ -98,6 +109,12 @@ Finally generate the TensorRT engine from trained OCDNet and OCRNet:
 
 #Generate OCRNet engine with dynamic batch size and max batch size is 32:
 /usr/src/tensorrt/bin/trtexec --onnx=./ocrnet.onnx --minShapes=input:1x1x32x100 --optShapes=input:32x1x32x100 --maxShapes=input:32x1x32x100 --fp16 --saveEngine=./ocrnet.fp16.engine
+
+# #Generate engines for ViT-based models
+# /usr/src/tensorrt/bin/trtexec --onnx=./ocdnet_fan_tiny_2x_icdar.onnx --minShapes=input:1x3x736x1280 --optShapes=input:1x3x736x1280 --maxShapes=input:1x3x736x1280 --fp16 --saveEngine=./ocdnet.fp16.engine
+
+# /usr/src/tensorrt/bin/trtexec --onnx=./ocrnet-vit.onnx --minShapes=input:1x1x64x200 --optShapes=input:32x1x64x200 --maxShapes=input:32x1x64x200 --fp16 --saveEngine=./ocrnet.fp16.engine
+
 ```
 
 ### Building
@@ -146,6 +163,8 @@ int main()
     param.ocrnet_infer_input_shape[0] = 1;
     param.ocrnet_infer_input_shape[1] = 32;
     param.ocrnet_infer_input_shape[2] = 100;
+    // uncomment if you're using attention-based models:
+    // param.ocrnet_decode = Attention;
     nvOCDRp nvocdr_ptr = nvOCDR_init(param);
 
     // Load the input
