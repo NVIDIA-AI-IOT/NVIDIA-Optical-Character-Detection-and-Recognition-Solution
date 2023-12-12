@@ -1,6 +1,8 @@
 # C++ sample
 We provide two c++ sample to illustrate the usage of nvOCDR API and library parameter tuning. You need firstly follow the [Installation](https://github.com/NVIDIA-AI-IOT/NVIDIA-Optical-Character-Detection-and-Recognition-Solution#installation) to prepare the environment to run the following samples.
 
+**Note:** The samples with `_vit` suffix are for running ViT-based OCDNet and OCRNet.
+
 ## Simple inference sample
 
 The simple inference is using `nvOCDR_inference` to do the inference. It will resize the input image to the OCDNet's input shape to do detection and then feed the detected text areas to OCRNet for recognition.
