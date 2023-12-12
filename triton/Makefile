@@ -58,7 +58,7 @@ OBJDIR    =$(call concat,$(OUTDIR),/chobj)
 COMMON_LIBS = -lnvinfer -lcudart -lopencv_core -lopencv_imgproc -lopencv_imgcodecs -lcublas -lnvinfer_plugin
 COMMON_LD_FLAGS += $(COMMON_LIBS)
 
-OUTNAME_RELEASE = nvocdr.cpython-38-x86_64-linux-gnu.so
+OUTNAME_RELEASE = nvocdr.cpython-310-x86_64-linux-gnu.so
 
 SRC_ROOT=../src
 CSRCS:= $(wildcard $(SRC_ROOT)/*.cpp)
@@ -85,7 +85,7 @@ release : $(OUTDIR)/$(OUTNAME_RELEASE)
 # $(OUTDIR)/$(OUTNAME_RELEASE) : $(OBJS) $(TEST_OBJS) $(CUOBJS)
 $(OUTDIR)/$(OUTNAME_RELEASE) : $(OBJS) $(CUOBJS)
 	$(ECHO) Linking: $@
-	$(AT)$(CC) -O3 -Wall -shared $(CFLAGS) -fPIC  -I/usr/include/python3.8 -I/usr/local/lib/python3.8/dist-packages/pybind11/include pybind.cpp -o $@ $^ $(LFLAGS)  $(LIBS)
+	$(AT)$(CC) -O3 -Wall -shared $(CFLAGS) -fPIC  -I/usr/include/python3.10 -I/usr/local/lib/python3.10/dist-packages/pybind11/include pybind.cpp -o $@ $^ $(LFLAGS)  $(LIBS)
 
 
 $(OBJDIR)/%.o: $(SRC_ROOT)/%.cpp

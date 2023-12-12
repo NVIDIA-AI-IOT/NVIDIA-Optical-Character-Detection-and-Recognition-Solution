@@ -1,4 +1,4 @@
-ARG BASE_TRITON_IMAGE=nvcr.io/nvidia/tritonserver:23.02-py3-sdk 
+ARG BASE_TRITON_IMAGE=nvcr.io/nvidia/tritonserver:23.11-py3-sdk 
 FROM ${BASE_TRITON_IMAGE} AS build
 
 
