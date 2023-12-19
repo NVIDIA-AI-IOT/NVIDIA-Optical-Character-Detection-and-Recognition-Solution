@@ -283,9 +283,13 @@ bool nvOCDRAlgorithm::SetInitParams(DSCustom_CreateParams *params)
   param.ocrnet_infer_input_shape[1] = m_OCRNetInferShape[1];
   param.ocrnet_infer_input_shape[2] = m_OCRNetInferShape[2];
 
-  // Init intermediate buffer if the m_batch_width is not even multiple of 128
+  // Init intermediate buffer if the nvbufsurface adds padding
   // interbuffer save BGR data
-  if ((m_batch_width % 256) != 0)
+  uint32_t surf_width = m_process_surf->surfaceList->width;
+  uint32_t surf_height = m_process_surf->surfaceList->height;
+  uint32_t surf_size = m_process_surf->surfaceList->dataSize;
+  uint32_t surf_channel = 3; //BGR
+  if (surf_width*surf_height*surf_channel != surf_size)
   {
     ck(cudaMalloc(&m_interbuffer,
                   sizeof(uint8_t) * m_batch_width * m_batch_height * 3 * m_max_batch));
