@@ -93,6 +93,7 @@ cmake ..
 # cmake .. -DTRT_LIB_DIR=/usr/lib/aarch64-linux-gnu/
 make nvinfer_plugin -j4
 ```
+**Notes**: You can use the [helper script](./tools/compile_trt_oss_jetson.sh) to compile TensorRT OSS.
 
 - Copy the `libnvinfer_plugin.so` to the system library path
 ```shell
