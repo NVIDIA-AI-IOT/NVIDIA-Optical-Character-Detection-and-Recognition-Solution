@@ -50,6 +50,9 @@ typedef struct
   int32_t ocdnet_infer_input_shape[3];
   // Rectifier param
   bool upsidedown = false;
+  //  The text box aspect-ratio (width/height) threshold:
+  //  If text box aspect-ratio is smaller than threshold then we will rotate the box. 
+  float rotation_threshold = 0.0; 
   // OCRNet param:
   char* ocrnet_trt_engine_path;
   char* ocrnet_dict_file;

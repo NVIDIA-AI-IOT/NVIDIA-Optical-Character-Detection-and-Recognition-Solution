@@ -309,7 +309,8 @@ nvOCDR::nvOCDR(nvOCDRParam param):
     mRect = std::move(std::unique_ptr<RectEngine>(new RectEngine(ocr_input_height, 
                                                                  ocr_input_width,
                                                                  mOCRNetMaxBatch,
-                                                                 upsidedown, isNHWC)));
+                                                                 upsidedown, isNHWC,
+                                                                 param.rotation_threshold)));
     // Set the OCRNet's TRT input buffer as rect's output
     mRect->setOutputBuffer(mOCRNet->mTRTInputBufferIndex);
     mRect->initBuffer(mBuffMgr);
