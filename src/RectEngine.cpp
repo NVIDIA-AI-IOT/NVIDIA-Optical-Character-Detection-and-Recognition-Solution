@@ -2,13 +2,14 @@
 
 using namespace nvocdr;
 
-RectEngine::RectEngine(const int& output_height, const int& output_width, const int& ocr_infer_batch, const bool upside_down, const bool isNHWC)
+RectEngine::RectEngine(const int& output_height, const int& output_width, const int& ocr_infer_batch, const bool upside_down, const bool isNHWC, const float& rot_thresh)
     : mOutputHeight(output_height)
     , mOutputWidth(output_width)
     , mOutputChannel(RECT_OUTPUT_CHANNEL)
     , mOcrInferBatch(ocr_infer_batch)
     , mUDFlag(upside_down)
     , mIsNHWC(isNHWC)
+    , mRotThresh(rot_thresh)
     , mOutputBufferIndex(-1)
 {
     //cublas
@@ -220,7 +221,8 @@ RectEngine::formatPoints(const Polygon& polys, std::vector<Point2d>& format_poin
     std::vector<float> distances(4);
     distances[0] = pointDistance(format_points[0], format_points[1]);
     distances[1] = pointDistance(format_points[0], format_points[3]);
-    if(distances[1] > distances[0])
+    float aspect_ratio = distances[0] / distances[1];
+    if(aspect_ratio < mRotThresh)
     {
         Point2d tmp_point = format_points[0];
         format_points[0] = format_points[3];

@@ -18,7 +18,7 @@ namespace nvocdr
 class RectEngine
 {
     public:
-        RectEngine(const int& output_height, const int& output_width,const int& ocr_infer_batch, const bool upside_down = 0, const bool isNHWC=false);
+        RectEngine(const int& output_height, const int& output_width,const int& ocr_infer_batch, const bool upside_down = 0, const bool isNHWC=false, const float& rot_thresh=0.0);
         ~RectEngine();
 
         bool initBuffer(BufferManager& buffer_mgr);
@@ -65,6 +65,7 @@ class RectEngine
         int mOcrInferBatch;
         bool mUDFlag;
         bool mIsNHWC;
+        float mRotThresh = 0.0;
 
         // variables to save perspective trans matrix in host
         int mPtMatrixsPtrHostIdx;
