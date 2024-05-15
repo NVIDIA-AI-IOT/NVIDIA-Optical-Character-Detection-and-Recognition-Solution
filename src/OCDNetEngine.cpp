@@ -1,8 +1,8 @@
 #include "OCDNetEngine.h"
 #include <iostream>
-#include <opencv4/opencv2/dnn.hpp>
-#include <opencv4/opencv2/imgproc.hpp>
-#include <opencv4/opencv2/highgui.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
 
 using namespace nvocdr;
 using namespace std;

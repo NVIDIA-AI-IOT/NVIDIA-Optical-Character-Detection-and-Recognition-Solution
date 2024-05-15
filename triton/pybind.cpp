@@ -14,7 +14,8 @@ nvOCDRWarp::nvOCDRWarp(nvOCDRParam param, std::string& ocd_trt_path, std::string
     param.ocrnet_trt_engine_path = (char* )ocr_trt_path.c_str();
     param.ocrnet_dict_file = (char* )ocr_dict_path.c_str();
     std::cout<< "[nvOCDR] Load OCD tensorRT engine from: " <<param.ocdnet_trt_engine_path<< std::endl;
-    std::cout<< "[nvOCDR] Load OCD tensorRT engine from: " <<param.ocrnet_trt_engine_path<< std::endl;
+    std::cout<< "[nvOCDR] Load OCR tensorRT engine from: " <<param.ocrnet_trt_engine_path<< std::endl;
+    std::cout<< "[nvOCDR] Load OCR dict from: " <<param.ocrnet_dict_file<< std::endl;
 
     param.ocdnet_infer_input_shape[0] = OCDNetInferShape[0];
     param.ocdnet_infer_input_shape[1] = OCDNetInferShape[1];
@@ -106,7 +107,7 @@ std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>> nvOC
 }
 
 
-PYBIND11_MODULE(nvocdr, m) {
+PYBIND11_MODULE(nvocdr_pybind, m) {
     m.doc() = "nvOCDR lib plugin"; // optional module docstring
 
     py::class_<nvOCDRWarp>(m, "nvOCDRWarp")

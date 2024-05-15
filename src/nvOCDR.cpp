@@ -1,8 +1,8 @@
-# include "nvocdr.h"
-# include "nvOCDR.h"
-# include <algorithm>
-# include <cstring>
-# define DEBUG 0
+#include "nvocdr.h"
+#include "nvOCDR.hpp"
+#include <algorithm>
+#include <cstring>
+#define DEBUG 0
 
 using namespace nvocdr;
 
@@ -455,7 +455,7 @@ nvOCDR::inferPatch(void* oriImgData, void* patchImgs, const Dims& patchImgsShape
             int row_idx = patchCnt / num_col_cut;
             int col_idx = patchCnt % num_col_cut;
             ocdOutputPatchshape.d[0] = 1;
-            patchMaskMergeCUDA(oriImgBitMapDev.data(), mBuffMgr.mDeviceBuffer[ocdThresholdBufIdx].data()+(i*patch_w*patch_h), oriImgMaskDev.data(), mBuffMgr.mDeviceBuffer[ocdRawOutBufIdx].data()+(i*patch_w*patch_h*sizeof(float)), ocdOutputPatchshape, oriBinaryshape, overlapRate, col_idx, row_idx, num_col_cut, num_row_cut,mStream);
+            patchMaskMergeCUDA(oriImgBitMapDev.data(), static_cast<uchar*>(mBuffMgr.mDeviceBuffer[ocdThresholdBufIdx].data())+(i*patch_w*patch_h), oriImgMaskDev.data(), static_cast<float*>(mBuffMgr.mDeviceBuffer[ocdRawOutBufIdx].data())+(i*patch_w*patch_h*sizeof(float)), ocdOutputPatchshape, oriBinaryshape, overlapRate, col_idx, row_idx, num_col_cut, num_row_cut,mStream);
             patchCnt++;
         }
         cur_input_data += volume(cur_input_shape);
@@ -567,7 +567,7 @@ nvOCDR::OCRNetInferWarp(void* input_data, const Dims& input_shape, std::vector<s
 }
 
 void
-nvOCDR::patchMaskMergeCUDA(void* oriThresholdData, void* patchThresholdData, void* oriRawData, void* patchRawData, const Dims& patchImgsShape, const Dims& oriImgshape, const float overlapRate, const int col_idx, const int row_idx, const int num_col_cut, const int num_row_cut ,const cudaStream_t& stream)
+nvOCDR::patchMaskMergeCUDA(void* oriThresholdData, uchar* patchThresholdData, void* oriRawData, float* patchRawData, const Dims& patchImgsShape, const Dims& oriImgshape, const float overlapRate, const int col_idx, const int row_idx, const int num_col_cut, const int num_row_cut ,const cudaStream_t& stream)
 {
     int patch_w = patchImgsShape.d[3];
     int patch_h = patchImgsShape.d[2];

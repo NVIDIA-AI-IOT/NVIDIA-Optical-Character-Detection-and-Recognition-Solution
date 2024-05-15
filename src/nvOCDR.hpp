@@ -47,7 +47,7 @@ class nvOCDR
         void wrapInferPatch(void* input_data, const Dims& input_shape, float overlap_rate,
                             std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>>& output);
         void OCRNetInferWarp(void* input_data, const Dims& input_shape, std::vector<std::vector<Polygon>>& polys, std::vector<std::vector<std::pair<Polygon, std::pair<std::string, float>>>>& output);
-        void patchMaskMergeCUDA(void* oriThresholdData, void* patchThresholdData, void* oriRawData, void* patchRawData, const Dims& patchImgsShape, const Dims& oriImgshape, const float overlapRate, const int col_idx, const int row_idx, const int num_col_cut, const int num_row_cut ,const cudaStream_t& stream);
+        void patchMaskMergeCUDA(void* oriThresholdData, uchar* patchThresholdData, void* oriRawData, float* patchRawData, const Dims& patchImgsShape, const Dims& oriImgshape, const float overlapRate, const int col_idx, const int row_idx, const int num_col_cut, const int num_row_cut ,const cudaStream_t& stream);
 
     private:
         bool paramCheck();

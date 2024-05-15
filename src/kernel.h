@@ -31,15 +31,14 @@ typedef unsigned char uchar;
 
 
 #ifndef checkKernelErrors
-#    define checkKernelErrors(expr)                                                               \
+#    define checkKernelErrors()                                                               \
         do                                                                                        \
         {                                                                                         \
-            expr;                                                                                 \
                                                                                                   \
             cudaError_t __err = cudaGetLastError();                                               \
             if (__err != cudaSuccess)                                                             \
             {                                                                                     \
-                printf("Line %d: '%s' failed: %s\n", __LINE__, #expr, cudaGetErrorString(__err)); \
+                printf("Line %d:  failed: %s\n", __LINE__,  cudaGetErrorString(__err));           \
                 abort();                                                                          \
             }                                                                                     \
         }                                                                                         \
@@ -296,7 +295,7 @@ void minAreaRectCUDA(ContourPtrCUDA<uint16_t>& inContourPointsData, MinAreaRectP
 
 void calculateRotateCoefCUDA(void* rotateCoefBuf, const int degrees ,const cudaStream_t& stream);
 
-void patchMergeWarp(void* patchData, void* mergeData, void* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI,const cudaStream_t& stream);
+void patchMergeWarp(uchar* patchData, void* mergeData, float* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI,const cudaStream_t& stream);
 
 float KeepAspectRatioResize(void* inData, void* outData, const nvinfer1::Dims& inShape, const int32_t out_h, const int32_t out_w, const cudaStream_t& stream);
 

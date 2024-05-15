@@ -353,7 +353,7 @@ __global__ void mergePatchKernel(ImagePtrCUDA<uchar> patchThreshold , ImagePtrCU
 }
 
 
-void patchMergeWarp(void* patchThresholdData, void* mergeThresholdData, void* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI, const cudaStream_t& stream)
+void patchMergeWarp(uchar* patchThresholdData, void* mergeThresholdData, float* patchOcdOutRawData, void* mergeOcdOutRawData, const nvinfer1::Dims& patchShape, const nvinfer1::Dims& mergeShape, const ImgROI& patchROI, const ImgROI& mergeROI, const cudaStream_t& stream)
 {   
     int patchBS = patchShape.d[0];
     int patchCh = patchShape.d[1];
@@ -365,8 +365,8 @@ void patchMergeWarp(void* patchThresholdData, void* mergeThresholdData, void* pa
     int merge_h = mergeShape.d[1];
     int merge_w = mergeShape.d[2];
 
-    ImagePtrCUDA<uchar> patchThresholdPtr(patchBS, patch_h, patch_w, patchCh, static_cast<uchar*>(patchThresholdData), false);
-    ImagePtrCUDA<float> patchRawPtr(patchBS, patch_h, patch_w, patchCh, static_cast<float*>(patchOcdOutRawData), false);
+    ImagePtrCUDA<uchar> patchThresholdPtr(patchBS, patch_h, patch_w, patchCh, patchThresholdData, false);
+    ImagePtrCUDA<float> patchRawPtr(patchBS, patch_h, patch_w, patchCh, patchOcdOutRawData, false);
     ImagePtrCUDA<uchar> mergeThresholdPtr(mergeBS, merge_h, merge_w, mergeCh, static_cast<uchar*>(mergeThresholdData), true);
     ImagePtrCUDA<float> mergeRawPtr(mergeBS, merge_h, merge_w, mergeCh, static_cast<float*>(mergeOcdOutRawData), true);
 

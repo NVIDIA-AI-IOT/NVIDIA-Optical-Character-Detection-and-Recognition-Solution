@@ -3,7 +3,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include "nvOCDR.h"
+#include "nvOCDR.hpp"
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 namespace py = pybind11;
 using namespace nvocdr;
@@ -20,6 +25,10 @@ public:
 private:
     nvocdr::nvOCDR* m_nvOCDRLib;
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __NVOCDR_PYBIND_HEADER__
 

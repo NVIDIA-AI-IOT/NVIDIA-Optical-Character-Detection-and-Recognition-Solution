@@ -57,7 +57,7 @@ typedef struct
   char* ocrnet_trt_engine_path;
   char* ocrnet_dict_file;
   int32_t ocrnet_infer_input_shape[3];
-  OCRNetDecode ocrnet_decode = CTC;
+  OCRNetDecode ocrnet_decode = OCRNetDecode::CTC;
   // common param
 
 } nvOCDRParam;
