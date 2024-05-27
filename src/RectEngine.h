@@ -52,6 +52,9 @@ class RectEngine
         std::vector<float> matrixInversion(const std::vector<float>  &m);
         void warpPersceptive(void* src, const std::vector<int>& poly2Imgs, const Dims& input_shape, int outWeight, int outHeight, bool upsidedown, bool isNHWC, BufferManager& buffer_mgr,const cudaStream_t& stream);
         bool getDataFormat(){return mIsNHWC;};
+        int getGrayOutputDevBufferIdx(){return mGrayOutputBufferDevIdx;};
+        int getRGBOutputDevBufferIdx(){return mPerspectiveOutputBufferDevIdx;};
+
         
 #ifdef RECT_DEBUG
         std::string mImgSavePath;
@@ -89,6 +92,7 @@ class RectEngine
         int mLUArrayPtrDevIdx;
         int mBarrayPtrDevIdx;
         int mPerspectiveOutputBufferDevIdx;
+        int mGrayOutputBufferDevIdx;
 
 #ifdef RECT_DEBUG
         int mPerspectiveOutputBufferHostIdx;

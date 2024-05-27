@@ -35,7 +35,8 @@ enum DataFormat
 enum OCRNetDecode
 {
   CTC,
-  Attention
+  Attention,
+  CLIP
 };
 
 typedef struct

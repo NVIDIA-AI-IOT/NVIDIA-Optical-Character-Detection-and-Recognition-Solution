@@ -56,6 +56,10 @@ __global__ void warp(ImagePtrCUDA<T> srcPtr, ImagePtrCUDA<T> dst, ImagePtrCUDA<f
         T gray  = (T)CV_DESCALE(b * BY15 + g * GY15 + r * RY15, GRAY_SHIFT);
         float gray_scale   = ((float)gray - IMG_MEAN_GRAY) * IMG_SCALE_GRAY;
         *dst_gray.ptr(dst_b, y, x, 0) = gray_scale;
+        // bgr norm
+        *dst.ptr(dst_b, y, x, 0)   = *dst.ptr(dst_b, y, x, 0)/255.0 - 0.5;
+        *dst.ptr(dst_b, y, x, 1)   = *dst.ptr(dst_b, y, x, 1)/255.0 - 0.5;
+        *dst.ptr(dst_b, y, x, 2)   = *dst.ptr(dst_b, y, x, 2)/255.0 - 0.5;
         if(upsidedown)
         {
             int dst_b_UD = dst_b + dst.batches;

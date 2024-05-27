@@ -14,7 +14,8 @@ namespace nvocdr
 enum DecodeMode
 {
     CTC,
-    Attention
+    Attention,
+    CLIP
 };
 
 class OCRNetEngine
@@ -37,6 +38,7 @@ class OCRNetEngine
     private:
         std::unique_ptr<TRTEngine> mEngine;
         std::vector<std::string> mDict;
+        std::vector<std::string> mClipCharTrainDict;
         bool mUDFlag;
         DecodeMode mDecodeMode;
 

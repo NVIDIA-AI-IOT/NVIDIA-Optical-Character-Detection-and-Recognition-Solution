@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include "OCRNetEngine.h"
 #include "kernel.h"
 
@@ -23,11 +24,27 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
     {
         mDict.emplace_back("CTCBlank");
     }
-    else
+    else if (mDecodeMode == Attention)
     {
         mDict.emplace_back("[GO]");
         mDict.emplace_back("[s]");
-    };
+    }
+    else if (mDecodeMode == CLIP)
+    {
+        mDict.emplace_back("[E]");
+        mClipCharTrainDict.emplace_back("[E]");
+        std::string clip_charset_train = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+        for(int i=0; i<clip_charset_train.size(); i++)
+        {
+            std::string tmpStr(1,clip_charset_train[i]); 
+            mClipCharTrainDict.emplace_back(tmpStr);
+        }
+        
+    } 
+    else
+    {
+        std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
+    }
 
     while(!dict_file.eof())
     {
@@ -36,6 +53,14 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         {
             mDict.emplace_back(ch);
         }
+    }
+
+    if (mDecodeMode == CLIP)
+    {
+        mDict.emplace_back("[B]");
+        mDict.emplace_back("[P]");
+        mClipCharTrainDict.emplace_back("[B]");
+        mClipCharTrainDict.emplace_back("[P]");
     }
 
     mUDFlag = upside_down;
@@ -53,8 +78,8 @@ bool
 OCRNetEngine::initTRTBuffer(BufferManager& buffer_mgr)
 {
     // Init trt input gpu buffer
-    mTRTInputBufferIndex = buffer_mgr.initDeviceBuffer(mEngine->getMaxInputBufferSize(), sizeof(float));
-    mEngine->setInputBuffer(buffer_mgr.mDeviceBuffer[mTRTInputBufferIndex].data());
+    // mTRTInputBufferIndex = buffer_mgr.initDeviceBuffer(mEngine->getMaxInputBufferSize(), sizeof(float));
+    // mEngine->setInputBuffer(buffer_mgr.mDeviceBuffer[mTRTInputBufferIndex].data());
 
     // Init trt output gpu buffer
     mTRTOutputBufferIndex = buffer_mgr.initDeviceBuffer(mEngine->getMaxOutputBufferSize(), sizeof(float));
@@ -99,7 +124,7 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
     // float mean = 127.5;
     // float scale = 0.00784313;
     // subscal(item_cnt, buffer_mgr.mDeviceBuffer[mTRTInputBufferIndex].data(), scale, mean, stream);
-    
+
     mEngine->infer(stream);
 
     // CPU Decode:
@@ -154,7 +179,7 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
             temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
     }
-    else
+    else if (mDecodeMode == Attention)
     {
         for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
         {
@@ -176,6 +201,43 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
             }
             temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
+    }
+    else if (mDecodeMode == CLIP)
+    {
+        for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
+        {
+            int b_offset = batch_idx * output_len;
+            std::string tmp_text = "";
+            std::string de_text = "";
+            float prob = 1.0;
+
+            for(int i = 0; i < output_len; ++i)
+            {
+                if (mClipCharTrainDict[output_id[b_offset + i]] == "[E]")
+                {
+                    break;
+                }
+                tmp_text += mClipCharTrainDict[output_id[b_offset + i]];
+                prob *= output_prob[b_offset + i];
+            }
+            std::transform(tmp_text.begin(), tmp_text.end(), tmp_text.begin(), ::tolower);
+            for( int idx=0; idx<tmp_text.size(); idx++)
+            {
+                std::string tmpStr(1, tmp_text[idx]); 
+                if (std::find(mDict.begin(), mDict.end(), tmpStr) == mDict.end())
+                {
+                    continue;
+                }
+                de_text += tmpStr;
+
+            }
+            temp_de_texts.emplace_back(std::make_pair(de_text, prob));
+        }
+
+    }
+    else
+    {
+        std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
     }
 
     int stride = batch_size / 2;
