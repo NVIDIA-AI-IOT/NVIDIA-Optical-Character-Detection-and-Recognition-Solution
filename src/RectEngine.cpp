@@ -2,18 +2,18 @@
 
 using namespace nvocdr;
 
-RectEngine::RectEngine(const int& output_height, const int& output_width, const int& ocr_infer_batch, const bool upside_down, const bool isNHWC, const float& rot_thresh)
+RectEngine::RectEngine(const int& output_height, const int& output_width, const int& ocr_infer_batch, const bool upside_down, const bool isNHWC, const float& rot_thresh, const int& rec_output_channel)
     : mOutputHeight(output_height)
     , mOutputWidth(output_width)
-    , mOutputChannel(RECT_OUTPUT_CHANNEL)
+    , mOutputChannel(rec_output_channel)
     , mOcrInferBatch(ocr_infer_batch)
     , mUDFlag(upside_down)
     , mIsNHWC(isNHWC)
     , mRotThresh(rot_thresh)
-    , mOutputBufferIndex(-1)
 {
     //cublas
     checkCudaErrors(cublasCreate(&mHandle));
+    mIsRGBOutput = (rec_output_channel==3) ? true : false;
 #ifdef RECT_DEBUG
     mImgSavePath = "/localhome/local-bizhao/dataset/pcb_images/FRAME_0_1_H.jpg";
 #endif
@@ -48,12 +48,15 @@ bool RectEngine::initBuffer(BufferManager& buffer_mgr)
     mBarrayDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch*n, sizeof(float));
     mLUArrayPtrDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch, sizeof(float*));
     mBarrayPtrDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch, sizeof(float*));
-    mPerspectiveOutputBufferDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch*3*mOutputHeight*mOutputWidth, sizeof(uchar));
-    mGrayOutputBufferDevIdx = buffer_mgr.initDeviceBuffer(grayBatchSize*mOutputWidth*mOutputHeight, sizeof(float));
+    if (!mIsRGBOutput)
+    {
+        // if we use gray ouput, we need to init this RGB buff to calculate the gray ouput 
+        mRGBOutputBufferDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch*3*mOutputHeight*mOutputWidth, sizeof(float));
+    }
 
 #ifdef RECT_DEBUG
 
-    mPerspectiveOutputBufferHostIdx = buffer_mgr.initHostBuffer(mOcrInferBatch*3*mOutputHeight*mOutputWidth, sizeof(uchar));
+    mRGBOutputBufferHostIdx = buffer_mgr.initHostBuffer(mOcrInferBatch*3*mOutputHeight*mOutputWidth, sizeof(float));
     mGrayOutputBufferHostIdx = buffer_mgr.initHostBuffer(grayBatchSize*mOutputWidth*mOutputHeight, sizeof(float));
 #endif
     return true;
@@ -62,7 +65,14 @@ bool RectEngine::initBuffer(BufferManager& buffer_mgr)
 bool
 RectEngine::setOutputBuffer(const int& index)
 {
-    mOutputBufferIndex = index;
+    if (mIsRGBOutput)
+    {
+        mRGBOutputBufferDevIdx = index;
+    }
+    else
+    {
+        mGrayOutputBufferDevIdx = index;
+    }
     return 0;
 }
 
@@ -131,13 +141,13 @@ RectEngine::infer(void* input_data, const Dims& input_shape,
 #ifdef RECT_DEBUG
     int img_size = input_shape.d[1] * input_shape.d[2] * input_shape.d[3];
     checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].nbBytes(), cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mPerspectiveOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mPerspectiveOutputBufferDevIdx].data(), buffer_mgr.mHostBuffer[mPerspectiveOutputBufferHostIdx].size()*sizeof(uchar), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mRGBOutputBufferDevIdx].data(), buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].size()*sizeof(float), cudaMemcpyDeviceToHost));
     for (int idx_poly=0; idx_poly<polys_to_imgs.size(); ++idx_poly)
     {
         // write pt image
         int pt_img_size = 3*mOutputWidth*mOutputHeight;
         
-        uchar* h_pt_data = static_cast<uchar*>(buffer_mgr.mHostBuffer[mPerspectiveOutputBufferHostIdx].data() + idx_poly*pt_img_size);
+        uchar* h_pt_data = static_cast<uchar*>(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data() + idx_poly*pt_img_size);
         cv::Mat pt_frame(mOutputHeight, mOutputWidth, CV_8UC3, h_pt_data);
         std::string pt_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_pt_cuda.png";
         cv::imwrite(pt_img_file, pt_frame);
@@ -418,11 +428,12 @@ RectEngine::warpPersceptive(void* src,  const std::vector<int>& poly2Imgs, const
 
     int outBatchSize = poly2Imgs.size();
     uchar* src_data =  static_cast<uchar*>(src);
-    uchar* dst_data =  static_cast<uchar*>(buffer_mgr.mDeviceBuffer[mPerspectiveOutputBufferDevIdx].data());
+
+    float* dst_data =  static_cast<float*>(buffer_mgr.mDeviceBuffer[mRGBOutputBufferDevIdx].data());
     float* dst_gray_data =  static_cast<float*>(buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].data());
 
     ImagePtrCUDA<uchar> src_ptr(inBatchSize, inHeight, inWeight, inChannels, src_data);
-    ImagePtrCUDA<uchar> dst_ptr(outBatchSize, outHeight, outWeight, inChannels, dst_data);
+    ImagePtrCUDA<float> dst_ptr(outBatchSize, outHeight, outWeight, inChannels, dst_data, false);
 
     int gray_batchsize = outBatchSize;
     if(upsidedown)
@@ -433,6 +444,6 @@ RectEngine::warpPersceptive(void* src,  const std::vector<int>& poly2Imgs, const
     int* ploy2ImgsDev = static_cast<int*>(buffer_mgr.mDeviceBuffer[mPloy2ImgsDevIdx].data());
     float** ptMatrixPtr = static_cast<float**>(buffer_mgr.mDeviceBuffer[mPtMatrixsPtrDevIdx].data());
     checkCudaErrors(cudaMemcpyAsync(ploy2ImgsDev, poly2Imgs.data(), poly2Imgs.size()*sizeof(int), cudaMemcpyHostToDevice, stream));
-    warp_caller(src_ptr, dst_ptr, dst_gray_ptr, ptMatrixPtr, ploy2ImgsDev, upsidedown, stream);
+    warp_caller(src_ptr, dst_ptr, dst_gray_ptr, ptMatrixPtr, ploy2ImgsDev, upsidedown, mIsRGBOutput, stream);
 
 }

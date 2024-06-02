@@ -321,27 +321,13 @@ nvOCDR::nvOCDR(nvOCDRParam param):
                                                                  ocr_input_width,
                                                                  mOCRNetMaxBatch,
                                                                  upsidedown, isNHWC,
-                                                                 param.rotation_threshold)));
+                                                                 param.rotation_threshold,
+                                                                 param.ocrnet_infer_input_shape[0])));
+
+    // Set the OCRNet's TRT input buffer as rect's output
+    mRect->setOutputBuffer(mOCRNet->mTRTInputBufferIndex);
 
     mRect->initBuffer(mBuffMgr);
-    // Set rect's output as the OCRNet's TRT input buffer
-    if (mOCRNetInputShape.d[1] == 1)
-    {
-        // channel = 1 means OCRnet use gray image as input
-        int grayRectOutputDevIdx = mRect->getGrayOutputDevBufferIdx();
-        mOCRNet->setInputDeviceBuffer(mBuffMgr.mDeviceBuffer[grayRectOutputDevIdx], grayRectOutputDevIdx);
-    }
-    else if (mOCRNetInputShape.d[1] == 3)
-    {
-        // channel = 3 means OCRnet use rgb image as input
-        int rgbRectOutputDevIdx = mRect->getRGBOutputDevBufferIdx();
-        mOCRNet->setInputDeviceBuffer(mBuffMgr.mDeviceBuffer[rgbRectOutputDevIdx], rgbRectOutputDevIdx);
-    }
-    else
-    {
-        std::cerr<<"[ERROR] The OCRnet only supports input channel 1 or 3."<<std::endl;
-        exit(0);
-    }
 }
 
 
