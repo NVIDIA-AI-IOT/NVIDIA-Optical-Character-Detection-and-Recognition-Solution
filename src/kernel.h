@@ -285,7 +285,7 @@ struct MinAreaRectPtrCUDA
 //In-place scale and substract
 void subscal(const unsigned int sample_cnt, void* data, float scale, float mean, const cudaStream_t& stream = 0);
 
-void warp_caller(const ImagePtrCUDA<uchar>& src, ImagePtrCUDA<uchar>& dst, ImagePtrCUDA<float>& dst_gray, float** ptMatrixPtr, int* poly2Imgs, bool upsidedown, const cudaStream_t& stream);
+void warp_caller(const ImagePtrCUDA<uchar>& src, ImagePtrCUDA<float>& dst, ImagePtrCUDA<float>& dst_gray, float** ptMatrixPtr, int* poly2Imgs, bool upsidedown, bool isRGBInput, const cudaStream_t& stream);
 
 // ImagePtrCUDA<uchar> transpose_launcher( void* data, const int batchSize, const int w, const int h, const int c, bool isNHWC);
 void blobFromImagesCUDA(void* inData, void* outData, const nvinfer1::Dims& inShape, const nvinfer1::Dims& outShape, bool inputIsNHWC, const cudaStream_t& stream);

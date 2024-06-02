@@ -37,6 +37,36 @@ int visualize(std::string img_path, nvOCDROutputMeta texts,
     return 0;
 }
 
+void textFilter(nvOCDROutputMeta texts, const std::string keeped_charset, bool lowercase_only=true, bool uppercase_only=false)
+{
+    // we only have 1 image in this sample
+     for(int i = 0; i < texts.text_cnt[0]; ++i)
+    {
+        std::string filted_text = "";
+        std::string output_text(texts.text_ptr[i].ch);
+        if(lowercase_only)
+        {
+            std::transform(output_text.begin(), output_text.end(), output_text.begin(), ::tolower);
+        }
+        else if(uppercase_only)
+        {
+            std::transform(output_text.begin(), output_text.end(), output_text.begin(), ::toupper);
+        }
+        for(int idx=0; idx<output_text.size(); idx++)
+        {
+            if (keeped_charset.find(output_text[idx]) == std::string::npos)
+            {
+        
+                continue;
+            }
+            filted_text += output_text[idx];
+        }
+        strncpy(texts.text_ptr[i].ch, filted_text.c_str(), (size_t) MAX_CHARACTER_LEN - 1);
+
+    }
+
+}
+
 
 int main()
 {
@@ -79,6 +109,10 @@ int main()
     // simple inference
     nvOCDR_inference(input, &output, nvocdr_ptr);
     
+    // filter the output text, and covert to lowercase
+    std::string keeped_charset = "0123456789abcdefghijklmnopqrstuvwxyz";
+    textFilter(output, keeped_charset);
+
     // Visualize the output
     int offset = 0;
     visualize(img_path, output, input.shape[2], input.shape[1]);
