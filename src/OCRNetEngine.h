@@ -14,7 +14,8 @@ namespace nvocdr
 enum DecodeMode
 {
     CTC,
-    Attention
+    Attention,
+    CLIP
 };
 
 class OCRNetEngine

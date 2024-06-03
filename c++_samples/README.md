@@ -40,3 +40,21 @@ g++ ./crop_based_inference.cpp -I../include -L../ -I/usr/include/opencv4/ -I/usr
 The crop-based inference setting is good at recognize dense text areas:
 
 ![doc_scan](./test_img/doc.jpg_v.jpg)
+
+## CLIP-based inference sample
+
+The CLIP-based inference is using `CLIP4STR` for OCRnet to do inference. The origin charset for this version of OCRnet includes 94 chars, you need to push these 94 chars to character_list 
+```shell
+0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+```
+To run this sample, you need to create a new OCDNet engine with RBG input, the input size is 224x224:
+
+```shell
+/usr/src/tensorrt/bin/trtexec --onnx=./ocrnet_clip.onnx --minShapes=input:1x3x224x224 --optShapes=input:8x3x224x224--maxShapes=input:32x3x224x224 --fp16 --saveEngine=./ocdnet_clip.fp16.engine
+```
+
+Use the following command to compile the `simple_inference_ClipOCR.cpp`:
+
+```shell
+g++ ./simple_inference_ClipOCR.cpp -I../include -L../ -I/usr/include/opencv4/ -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lnvocdr -o simple_inference_ClipOCR
+```

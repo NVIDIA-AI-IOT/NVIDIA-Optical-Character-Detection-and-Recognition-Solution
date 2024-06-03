@@ -18,7 +18,7 @@ namespace nvocdr
 class RectEngine
 {
     public:
-        RectEngine(const int& output_height, const int& output_width,const int& ocr_infer_batch, const bool upside_down = 0, const bool isNHWC=false, const float& rot_thresh=0.0);
+        RectEngine(const int& output_height, const int& output_width,const int& ocr_infer_batch, const bool upside_down = 0, const bool isNHWC=false, const float& rot_thresh=0.0, const int& rec_output_channel=1);
         ~RectEngine();
 
         bool initBuffer(BufferManager& buffer_mgr);
@@ -52,6 +52,9 @@ class RectEngine
         std::vector<float> matrixInversion(const std::vector<float>  &m);
         void warpPersceptive(void* src, const std::vector<int>& poly2Imgs, const Dims& input_shape, int outWeight, int outHeight, bool upsidedown, bool isNHWC, BufferManager& buffer_mgr,const cudaStream_t& stream);
         bool getDataFormat(){return mIsNHWC;};
+        int getGrayOutputDevBufferIdx(){return mGrayOutputBufferDevIdx;};
+        int getRGBOutputDevBufferIdx(){return mRGBOutputBufferDevIdx;};
+
         
 #ifdef RECT_DEBUG
         std::string mImgSavePath;
@@ -65,6 +68,7 @@ class RectEngine
         int mOcrInferBatch;
         bool mUDFlag;
         bool mIsNHWC;
+        bool mIsRGBOutput;;
         float mRotThresh = 0.0;
 
         // variables to save perspective trans matrix in host
@@ -88,11 +92,12 @@ class RectEngine
         int mBarrayDevIdx;
         int mLUArrayPtrDevIdx;
         int mBarrayPtrDevIdx;
-        int mPerspectiveOutputBufferDevIdx;
+        int mRGBOutputBufferDevIdx = -1;
+        int mGrayOutputBufferDevIdx = -1;
 
 #ifdef RECT_DEBUG
-        int mPerspectiveOutputBufferHostIdx;
-        int mGrayOutputBufferHostIdx;
+        int mRGBOutputBufferHostIdx = -1;
+        int mGrayOutputBufferHostIdx = -1;
 #endif
 
 };

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include "OCRNetEngine.h"
 #include "kernel.h"
 
@@ -23,11 +24,19 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
     {
         mDict.emplace_back("CTCBlank");
     }
-    else
+    else if (mDecodeMode == Attention)
     {
         mDict.emplace_back("[GO]");
         mDict.emplace_back("[s]");
-    };
+    }
+    else if (mDecodeMode == CLIP)
+    {
+        mDict.emplace_back("[E]");
+    } 
+    else
+    {
+        std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
+    }
 
     while(!dict_file.eof())
     {
@@ -36,6 +45,12 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         {
             mDict.emplace_back(ch);
         }
+    }
+
+    if (mDecodeMode == CLIP)
+    {
+        mDict.emplace_back("[B]");
+        mDict.emplace_back("[P]");
     }
 
     mUDFlag = upside_down;
@@ -99,7 +114,7 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
     // float mean = 127.5;
     // float scale = 0.00784313;
     // subscal(item_cnt, buffer_mgr.mDeviceBuffer[mTRTInputBufferIndex].data(), scale, mean, stream);
-    
+
     mEngine->infer(stream);
 
     // CPU Decode:
@@ -154,7 +169,7 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
             temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
     }
-    else
+    else if (mDecodeMode == Attention)
     {
         for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
         {
@@ -176,6 +191,32 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
             }
             temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
+    }
+    else if (mDecodeMode == CLIP)
+    {
+        for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
+        {
+            int b_offset = batch_idx * output_len;
+            std::string de_text = "";
+            float prob = 1.0;
+
+            for(int i = 0; i < output_len; ++i)
+            {
+                if (mDict[output_id[b_offset + i]] == "[E]")
+                {
+                    break;
+                }
+                de_text += mDict[output_id[b_offset + i]];
+                prob *= output_prob[b_offset + i];
+            }
+
+            temp_de_texts.emplace_back(std::make_pair(de_text, prob));
+        }
+
+    }
+    else
+    {
+        std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
     }
 
     int stride = batch_size / 2;

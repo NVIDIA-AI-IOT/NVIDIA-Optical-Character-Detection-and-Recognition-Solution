@@ -281,8 +281,19 @@ nvOCDR::nvOCDR(nvOCDRParam param):
     DecodeMode decode_mode;
     if (param.ocrnet_decode == OCRNetDecode::CTC)
         decode_mode = DecodeMode::CTC;
-    else
+    else if (param.ocrnet_decode == OCRNetDecode::Attention)
+    {
         decode_mode = DecodeMode::Attention;
+    }
+    else if (param.ocrnet_decode == OCRNetDecode::CLIP)
+    {
+        decode_mode = DecodeMode::CLIP;
+    }
+    else
+    {
+        std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
+    }
+        
     // Init ocrnet
     std::string ocr_engine_path(param.ocrnet_trt_engine_path);
     std::string ocr_dict_path(param.ocrnet_dict_file);
@@ -310,9 +321,12 @@ nvOCDR::nvOCDR(nvOCDRParam param):
                                                                  ocr_input_width,
                                                                  mOCRNetMaxBatch,
                                                                  upsidedown, isNHWC,
-                                                                 param.rotation_threshold)));
+                                                                 param.rotation_threshold,
+                                                                 param.ocrnet_infer_input_shape[0])));
+
     // Set the OCRNet's TRT input buffer as rect's output
     mRect->setOutputBuffer(mOCRNet->mTRTInputBufferIndex);
+
     mRect->initBuffer(mBuffMgr);
 }
 
@@ -538,12 +552,12 @@ nvOCDR::OCRNetInferWarp(void* input_data, const Dims& input_shape, std::vector<s
         }
         // Do OCR inference
         std::vector<std::pair<std::string, float>> cur_de_texts;
-        int ocr_infer_batch;
+        int ocr_batch_size;
         if (mParam.upsidedown)
-            ocr_infer_batch = batch * 2;
+            ocr_batch_size = batch * 2;
         else
-            ocr_infer_batch = batch;
-        mOCRNetInputShape.d[0] = ocr_infer_batch;
+            ocr_batch_size = batch;
+        mOCRNetInputShape.d[0] = ocr_batch_size;
         mOCRNet->setInputShape(mOCRNetInputShape);
         mOCRNet->infer(mBuffMgr, cur_de_texts, mStream);
         // Add 

@@ -36,7 +36,7 @@ __device__ __forceinline__ float2 calcCoord(const float *c_warpMat, int x, int y
 }
 
 template<typename T>
-__global__ void warp(ImagePtrCUDA<T> srcPtr, ImagePtrCUDA<T> dst, ImagePtrCUDA<float> dst_gray, float** ptMatrixPtr, int* ploy2Imgs, bool upsidedown)
+__global__ void warp(ImagePtrCUDA<T> srcPtr, ImagePtrCUDA<float> dst, ImagePtrCUDA<float> dst_gray, float** ptMatrixPtr, int* ploy2Imgs, bool upsidedown, bool onlyRGB=false)
 {
     
     const int  dst_b = blockIdx.z;
@@ -47,12 +47,22 @@ __global__ void warp(ImagePtrCUDA<T> srcPtr, ImagePtrCUDA<T> dst, ImagePtrCUDA<f
     if (x < dst.cols && y < dst.rows)
     {
         const float2 coord = calcCoord(ptMatrixPtr[dst_b], x, y);
-        *dst.ptr(dst_b, y, x, c) = linearInterp<T, T>(srcPtr, src_b, coord.y, coord.x, c);
+        *dst.ptr(dst_b, y, x, c) = linearInterp<T, float>(srcPtr, src_b, coord.y, coord.x, c);
         __syncthreads();
-        // bgr to gray
+        
         int b   = *dst.ptr(dst_b, y, x, 0);
         int g   = *dst.ptr(dst_b, y, x, 1);
         int r   = *dst.ptr(dst_b, y, x, 2);
+        if (onlyRGB)
+        {
+            // BGR to RGB and norm
+            // mean value from https://github.com/mlfoundations/open_clip/blob/b4cf9269b0b11c0eea47cb16039369a46bd67449/src/open_clip/constants.py
+            *dst.ptr(dst_b, y, x, 0) = (r/255.0 - 0.4814546)/0.26862954;
+            *dst.ptr(dst_b, y, x, 1) = (g/255.0 - 0.4578275)/0.26130258;
+            *dst.ptr(dst_b, y, x, 2) = (b/255.0 - 0.4082107)/0.27577711;
+            return ;
+        }
+        // bgr to gray
         T gray  = (T)CV_DESCALE(b * BY15 + g * GY15 + r * RY15, GRAY_SHIFT);
         float gray_scale   = ((float)gray - IMG_MEAN_GRAY) * IMG_SCALE_GRAY;
         *dst_gray.ptr(dst_b, y, x, 0) = gray_scale;
@@ -69,7 +79,7 @@ __global__ void warp(ImagePtrCUDA<T> srcPtr, ImagePtrCUDA<T> dst, ImagePtrCUDA<f
 template<typename T>
 struct WarpDispatcher
 {
-    static void call(const ImagePtrCUDA<T> src, ImagePtrCUDA<T> dst, ImagePtrCUDA<float> dst_gray, float** ptMatrixPtr, int* ploy2Imgs,  bool upsidedown,
+    static void call(const ImagePtrCUDA<T> src, ImagePtrCUDA<float> dst, ImagePtrCUDA<float> dst_gray, float** ptMatrixPtr, int* ploy2Imgs,  bool upsidedown, bool onlyRGB,
                      const cudaStream_t& stream)
     {
 
@@ -78,15 +88,15 @@ struct WarpDispatcher
 
         // share memory  to save persceptive trans matrix ptr
         size_t smem_size = dst.batches * sizeof(float*);
-        warp<<<grid, block, smem_size, stream>>>(src, dst, dst_gray, ptMatrixPtr, ploy2Imgs, upsidedown);
+        warp<<<grid, block, smem_size, stream>>>(src, dst, dst_gray, ptMatrixPtr, ploy2Imgs, upsidedown, onlyRGB);
         cudaStreamSynchronize(stream);
         checkKernelErrors();
     }
 };
 
-void warp_caller(const ImagePtrCUDA<uchar>& src, ImagePtrCUDA<uchar>& dst, ImagePtrCUDA<float>& dst_gray, float** ptMatrixPtr, int* poly2Imgs, bool upsidedown, const cudaStream_t& stream)
+void warp_caller(const ImagePtrCUDA<uchar>& src, ImagePtrCUDA<float>& dst, ImagePtrCUDA<float>& dst_gray, float** ptMatrixPtr, int* poly2Imgs, bool upsidedown, bool isRGBInput, const cudaStream_t& stream)
 {
-    WarpDispatcher<uchar>::call(src, dst, dst_gray, ptMatrixPtr, poly2Imgs, upsidedown, stream);
+    WarpDispatcher<uchar>::call(src, dst, dst_gray, ptMatrixPtr, poly2Imgs, upsidedown, isRGBInput, stream);
 }
 
 
