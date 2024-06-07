@@ -432,8 +432,13 @@ RectEngine::warpPersceptive(void* src,  const std::vector<int>& poly2Imgs, const
     float* dst_data =  static_cast<float*>(buffer_mgr.mDeviceBuffer[mRGBOutputBufferDevIdx].data());
     float* dst_gray_data =  static_cast<float*>(buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].data());
 
-    ImagePtrCUDA<uchar> src_ptr(inBatchSize, inHeight, inWeight, inChannels, src_data);
-    ImagePtrCUDA<float> dst_ptr(outBatchSize, outHeight, outWeight, inChannels, dst_data, false);
+    ImagePtrCUDA<uchar> src_ptr(inBatchSize, inHeight, inWeight, inChannels, src_data, isNHWC);
+    if (mIsRGBOutput)
+    {
+        // RGB output is for CLIP4STR and it should be NCHW format
+        isNHWC = false;
+    }
+    ImagePtrCUDA<float> dst_ptr(outBatchSize, outHeight, outWeight, inChannels, dst_data, isNHWC);
 
     int gray_batchsize = outBatchSize;
     if(upsidedown)

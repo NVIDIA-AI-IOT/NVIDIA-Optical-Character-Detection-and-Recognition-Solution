@@ -1,5 +1,4 @@
 pynvjpeg
 pybind11
-python-config
 opencv-python
 pycuda==2022.2.2
