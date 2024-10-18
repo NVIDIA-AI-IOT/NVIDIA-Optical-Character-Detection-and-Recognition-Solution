@@ -1,0 +1,34 @@
+dino: detr with improved denoising anchor 
+boxes for end -10- end object detection 
+hao zhang 1,3: * 
+shilong liu2,3*+ lei zhang3+ 
+feng li1,c ,3*+ 
+feng li1,c (2004). 
+hang su2 jun zhu2 lionel m. ni1,4 heung yeung shum 1,3 
+1 1the hong kong university of science and technology 
+2dept. of cst (2002). bnrist bnrist center institute for ai tsinghua university. 
+international digital economy academy (idea 
+athe hong kong [i niversity of science and technology (guangzhou 
+hhzhangcx fliay 0.01 econnect econnect ust hk 
+(lius1203 omails tsinghua edu cn 
+(suhangss dcsz j) cmail tsinghua edu cn 
+(ni, hsh wn gust hk 
+(leizhang) gidea edu cn 
+abstract. we present dino detr with improved denoising anchor 
+boxes 
+state-of- the- art end- -to-end object detector dino improves 
+over previous detr like models in performance and efficiency by using 
+mixed query selection method 
+contrastive way for denoising training, 
+for anchor initialization. and 
+look forward twice scheme for box pre- 
+diction. dino achieves 48 3ap in 12 epochs and 51.0ap in 36 epochs 
+resnet 50 backbone and multi- -scale features yield- 
+on coco with 
+significant improvement of +4.9ap and +2.4ap respectively, 
+ing 
+compared to dn-detr, the previous best detr- like model. dino 
+scales well in both model size and data size. without bells and whistles 
+swinl backbone, 
+after pre- training on the objects365 dataset with 
+dino obtains the best results on both coco val2017 63.2ap) and 

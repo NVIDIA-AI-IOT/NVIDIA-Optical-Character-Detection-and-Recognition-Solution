@@ -569,7 +569,6 @@ __global__ void calculateBoxDistanceLauncher(float* boxCenters,float* boxLeftCen
         {
             letterMask[i*MAX_LETTERS_IN_IMAGE + j] = -1;
         }
-        printf("%d, %d, (%f, %f), (%f, %f), %f ,%f, %f ,%f, %d \n",i,j,box1_rx,box1_ry,box2_lx,box2_ly,radian,angle, left2RightDis, right2LeftDis , letterMask[i*MAX_LETTERS_IN_IMAGE + j]);
     }
     
 
@@ -578,7 +577,7 @@ __global__ void calculateBoxDistanceLauncher(float* boxCenters,float* boxLeftCen
 
 void calculateBoxDistance(void* boxCenters, void* boxLeftCenters, void* boxRightCenters, void* letterMask, void* r2lDistance, const int letterNum, const cudaStream_t& stream)
 {
-    std::cout<< letterNum << " " << divUp(letterNum, BLOCK) << std::endl;
+
     dim3 block(BLOCK * divUp(letterNum, BLOCK));
     dim3 grid(letterNum);
 

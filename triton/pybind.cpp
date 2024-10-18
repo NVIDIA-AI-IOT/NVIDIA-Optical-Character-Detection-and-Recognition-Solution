@@ -14,7 +14,7 @@ nvOCDRWarp::nvOCDRWarp(nvOCDRParam param, std::string& ocd_trt_path, std::string
     param.ocrnet_trt_engine_path = (char* )ocr_trt_path.c_str();
     param.ocrnet_dict_file = (char* )ocr_dict_path.c_str();
     std::cout<< "[nvOCDR] Load OCD tensorRT engine from: " <<param.ocdnet_trt_engine_path<< std::endl;
-    std::cout<< "[nvOCDR] Load OCD tensorRT engine from: " <<param.ocrnet_trt_engine_path<< std::endl;
+    std::cout<< "[nvOCDR] Load OCR tensorRT engine from: " <<param.ocrnet_trt_engine_path<< std::endl;
 
     param.ocdnet_infer_input_shape[0] = OCDNetInferShape[0];
     param.ocdnet_infer_input_shape[1] = OCDNetInferShape[1];

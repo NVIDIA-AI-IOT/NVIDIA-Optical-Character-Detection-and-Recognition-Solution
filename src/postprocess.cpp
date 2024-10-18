@@ -145,9 +145,9 @@ void Letter2Sentence::generateSentence(const int keyIdx, std::vector<Letter>& le
     return ;
 }
 
-void Letter2Sentence::extractSentence(std::vector<std::string>& texts, std::vector<std::vector<int>>& boxes, std::vector<std::string>& sentence)
+std::vector<std::string> Letter2Sentence::extractSentence(std::vector<std::string>& texts, std::vector<std::vector<int>>& boxes)
 {
-
+    std::vector<std::string> sentence;
     float* centerHostBuf = static_cast<float*>(mBuffer_mgr.mHostBuffer[mCenterHostBufIdx].data());
     float* leftCenterHostBuf = static_cast<float*>(mBuffer_mgr.mHostBuffer[mLeftSideCenterHostBufIdx].data());
     float* rightCenterHostBuf = static_cast<float*>(mBuffer_mgr.mHostBuffer[mRightSideCenterHostBufIdx].data());
@@ -158,10 +158,10 @@ void Letter2Sentence::extractSentence(std::vector<std::string>& texts, std::vect
         // Letter letter = wordsInfo[i];
         Letter letter;
         letter.text = texts[i];
-        letter.polys.x1 = boxes[i][1]; letter.polys.y1 = boxes[i][2];
-        letter.polys.x2 = boxes[i][3]; letter.polys.y2 = boxes[i][4];
-        letter.polys.x3 = boxes[i][5]; letter.polys.y3 = boxes[i][6];
-        letter.polys.x4 = boxes[i][7]; letter.polys.y4 = boxes[i][8];
+        letter.polys.x1 = boxes[i][0]; letter.polys.y1 = boxes[i][1];
+        letter.polys.x2 = boxes[i][2]; letter.polys.y2 = boxes[i][3];
+        letter.polys.x3 = boxes[i][4]; letter.polys.y3 = boxes[i][5];
+        letter.polys.x4 = boxes[i][6]; letter.polys.y4 = boxes[i][7];
         letters.push_back(letter);
         getBoxInfo(letter.polys,letter.boxInfo);
         centerHostBuf[2*i] = letter.boxInfo.boxCenter.x;
@@ -233,8 +233,8 @@ void Letter2Sentence::extractSentence(std::vector<std::string>& texts, std::vect
         // std::cout<< currentStn << std::endl;
         sentence.push_back(currentStn);
     }
-    printf("sentence final %d \n", sentence.size());
-    return;
+    printf("[Word2sentence] Got %ld sentence\n", sentence.size());
+    return sentence;
 }
 
 }

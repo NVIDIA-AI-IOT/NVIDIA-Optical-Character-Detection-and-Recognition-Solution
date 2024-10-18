@@ -34,7 +34,7 @@ public:
 
     bool initBuffer();
     void getBoxInfo(const Polygon& polys, BoxInfo& boxInfo);
-    void extractSentence(std::vector<std::string>& texts, std::vector<std::vector<int>>& boxes, std::vector<std::string>& sentence);
+    std::vector<std::string> extractSentence(std::vector<std::string>& texts, std::vector<std::vector<int>>& boxes);
     void generateSentence(const int keyIdx, std::vector<Letter>& letters, std::vector<int>& letterIdxList, float* sideDisMetrix, std::vector<int>& sentence);
 
 private:
