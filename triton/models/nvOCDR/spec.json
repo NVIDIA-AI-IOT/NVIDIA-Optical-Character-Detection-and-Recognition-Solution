@@ -7,8 +7,8 @@
     "ocdnet_trt_engine_path": "/opt/nvocdr/engines/ocdnet_vit.fp16.engine",
     "ocdnet_infer_input_shape": [
         3,
-        OCD_INPUT_H,
-        OCD_INPUT_W
+        736,
+        1280
     ],
     "ocdnet_binarize_threshold": 0.3,
     "ocdnet_polygon_threshold": 0.1,

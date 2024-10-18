@@ -1,4 +1,4 @@
-ARG BASE_TRITON_IMAGE=nvcr.io/nvidia/tritonserver:23.11-py3
+ARG BASE_TRITON_IMAGE=nvcr.io/nvidia/tritonserver:24.09-py3 
 FROM ${BASE_TRITON_IMAGE} AS build
 
 # step1: nvocdr triton sample workdir 
@@ -35,6 +35,3 @@ RUN cd /opt/nvocdr/ocdr/triton && make -j8
 
 ENV PYTHONPATH="/opt/nvocdr/ocdr/triton:${PYTHONPATH}"
 WORKDIR /opt/nvocdr
-
-
-

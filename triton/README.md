@@ -50,8 +50,8 @@
     bash build_engine.sh 736 1280 1 0
 
     CUDA_VISIBLE_DEVICES=<gpu idx> tritonserver --model-repository /opt/nvocdr/ocdr/triton/models/
-    ```
-    - Inference for high resolution images  
+
+ - Inference for high resolution images  
       nvocdr triton can support hight resolution images as input such as 4000x4000. you can change the spec file in `models/nvOCDR/spec.json` to support the high resolution images inference.
       ```
       # to support high resolution images
