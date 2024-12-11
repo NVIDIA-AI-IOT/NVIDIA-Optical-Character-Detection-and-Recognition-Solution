@@ -183,7 +183,7 @@ TRTEngine::infer(const cudaStream_t& stream)
 
 TRTEngine::~TRTEngine()
 {
-    mRuntime.reset(nullptr);
     mContext.reset(nullptr);
     mEngine.reset(nullptr);
+    mRuntime.reset(nullptr);
 }
