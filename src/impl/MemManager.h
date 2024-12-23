@@ -1,12 +1,16 @@
-#ifndef __NVOCDR_MEM_HEADER__
-#define __NVOCDR_MEM_HEADER__
+#pragma once
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <map>
+#include "kernel.h"
 
-namespace nvocdr
-{
+
+
+namespace nvocdr {
+
 //!
 //! \brief  The GenericBuffer class is a templated class for buffers.
 //!
@@ -30,6 +34,13 @@ public:
     //! \brief Construct an empty buffer.
     //!
     // GenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
+    GenericBuffer()
+        : mSize(0)
+        , mCapacity(0)
+        , mItemSize(1)
+        , mBuffer(nullptr)
+    {
+    }
     GenericBuffer(const size_t item_size)
         : mSize(0)
         , mCapacity(0)
@@ -187,27 +198,42 @@ using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 //!
 //! \brief  The ManagedBuffer class groups together a pair of corresponding device and host buffers.
 //!
-class PairBuffer
-{
-public:
-    DeviceBuffer deviceBuffer;
-    HostBuffer hostBuffer;
-};
+// class PairBuffer
+// {
+// public:
+//     DeviceBuffer deviceBuffer;
+//     HostBuffer hostBuffer;
+// };
 
 //Helper class that control all the mem used in the lib
 //Version 0 
 class BufferManager
 {
     public:
-        BufferManager();
+        void initBuffer(const std::string& name, const size_t& size, bool device = true, bool host = true);
+        void* getBuffer(const std::string & name, bool on_host);
+        size_t getBufferSize(const std::string& name);
+        void copyDeviceToHost(const std::string &name, const cudaStream_t& stream, bool async = true);
+        void copyHostToDevice(const std::string &name, const cudaStream_t& stream, bool async = true);
 
-        int initDeviceBuffer(const size_t size, const size_t item_size);
-        int initHostBuffer(const size_t size, const size_t item_size);
+        static BufferManager& Instance() {
+          static BufferManager singleton;
+          return singleton;
+        }
+        BufferManager(const BufferManager &) = delete;
+        BufferManager & operator = (const BufferManager &) = delete;
+        // int initDeviceBuffer(const size_t size, const size_t item_size);
+        // int initHostBuffer(const size_t size, const size_t item_size);
 
-        std::vector<DeviceBuffer> mDeviceBuffer;
-        std::vector<HostBuffer> mHostBuffer;
+        // std::vector<DeviceBuffer> mDeviceBuffer;
+        // std::vector<HostBuffer> mHostBuffer;
+    private:
+      BufferManager() {}
+      ~BufferManager() {}
+      std::map<std::string, DeviceBuffer> mDeviceBuffer;
+      std::map<std::string, HostBuffer> mHostBuffer;
+      std::map<std::string, size_t> mNumBytes;
 };
 
 }
 
-#endif

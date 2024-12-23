@@ -45,7 +45,7 @@ int main()
     // Please pay attention to the following parameters. You may need to change them according to different models.
     nvOCDRParam param;
     param.input_data_format = NHWC;
-    param.ocdnet_trt_engine_path = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv1_models/ocdnet_1280.fp16.engine";
+    param.ocdnet_trt_engine_path = (char *)"/home/csh/nvocdr/onnx_models/ocdnet.fp16.engine";
     param.ocdnet_infer_input_shape[0] = 3;
     param.ocdnet_infer_input_shape[1] = 736;
     param.ocdnet_infer_input_shape[2] = 1280;
@@ -53,15 +53,15 @@ int main()
     param.ocdnet_polygon_threshold = 0.3;
     param.ocdnet_max_candidate = 200;
     param.ocdnet_unclip_ratio = 1.5;
-    param.ocrnet_trt_engine_path = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv1_models/ocrnet.fp16.engine";
-    param.ocrnet_dict_file = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv1_models/character_list";
+    param.ocrnet_trt_engine_path = (char *)"/home/csh/nvocdr/onnx_models/ocrnet.fp16.engine";
+    param.ocrnet_dict_file = (char *)"/home/csh/nvocdr/onnx_models/character_list.txt";
     param.ocrnet_infer_input_shape[0] = 1;
     param.ocrnet_infer_input_shape[1] = 32;
     param.ocrnet_infer_input_shape[2] = 100;
     nvOCDRp nvocdr_ptr = nvOCDR_init(param);
 
     // Load the input
-    const char* img_path = "/hdd_10t/tylerz/CTSE_DL/github/scene_text.jpg";
+    const char* img_path = "/home/csh/nvocdr/c++_samples/test_img/doc.jpg";
     cv::Mat img = cv::imread(img_path);
     nvOCDRInput input;
     input.device_type = GPU;
