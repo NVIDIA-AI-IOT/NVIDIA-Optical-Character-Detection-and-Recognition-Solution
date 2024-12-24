@@ -7,7 +7,6 @@
 
 #include "MemManager.h"
 #include "TRTEngine.h"
-#include "utils.h"
 #include "kernel.h"
 #include "nvocdr.h"
 
@@ -25,8 +24,8 @@ class OCDNetEngine : public OCDTRTEngine
         bool customInit() final;
         // OCRNetEngine() = default;
         OCDNetEngine(const char name[], const nvOCDParam& param) : OCDTRTEngine(name, param) { };
-        void process(const cudaStream_t& stream);
-        void postprocess(const cudaStream_t& stream);
+        // void process(const cudaStream_t& stream);
+        // void postprocess(const cudaStream_t& stream);
 
         
 

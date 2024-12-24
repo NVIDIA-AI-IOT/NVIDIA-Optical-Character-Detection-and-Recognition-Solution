@@ -9,11 +9,9 @@ using namespace nvocdr;
 
 inline std::vector<cv::Rect> getTilePlan(size_t input_w, size_t input_h, size_t raw_w, size_t raw_h, size_t stride)
 {
-
     // std::cout << input_w << " " << input_h << " " << raw_w << " " << raw_h << " " << stride << "\n";
     size_t h_cnt = (raw_h - input_h) / stride + 1;
     size_t w_cnt = (raw_w - input_w) / stride + 1;
-    // std::cout << h_cnt << " " << w_cnt << "\n";
 
     std::vector<cv::Rect> plan;
     for (size_t i = 0; i <= h_cnt; ++i)
@@ -21,7 +19,8 @@ inline std::vector<cv::Rect> getTilePlan(size_t input_w, size_t input_h, size_t 
         for (size_t j = 0; j <= w_cnt; ++j)
         {
             cv::Point tl(j * stride, i * stride);
-            // clip 
+            // clip
+            // todo (shuohanc) use inside, not padding, make best use of whole image
             cv::Point br(std::min(j * stride + input_w, raw_w), std::min(i * stride + input_h, raw_h));
             plan.emplace_back(tl, br);
         }
@@ -29,149 +28,278 @@ inline std::vector<cv::Rect> getTilePlan(size_t input_w, size_t input_h, size_t 
 
     return plan;
 }
-// bool
-// nvOCDR::paramCheck()
-// {
-//     if (mParam.ocdnet_infer_input_shape[0] != 1 && mParam.ocdnet_infer_input_shape[0] != 3)
-//     {
-//         std::cerr<<"[ERROR] The OCDNet inference channel should be 1 or 3."<<std::endl;
-//         return false;
-//     }
 
-//     if (mParam.ocdnet_binarize_threshold <= 0 || mParam.ocdnet_binarize_threshold > 1)
-//     {
-//         std::cerr<<"[ERROR] The ocdnet_binarize_threshold should be (0, 1]."<<std::endl;
-//         return false;
-//     }
-
-//     if (mParam.ocdnet_polygon_threshold <= 0 || mParam.ocdnet_polygon_threshold > 1)
-//     {
-//         std::cerr<<"[ERROR] The ocdnet_polygon_threshold should be (0, 1]."<<std::endl;
-//         return false;
-//     }
-
-//     if (mParam.ocrnet_infer_input_shape[0] != 1 && mParam.ocrnet_infer_input_shape[0] != 3)
-//     {
-//         std::cerr<<"[ERROR] The OCRNet inference channel should be 1 or 3."<<std::endl;
-//         return false;
-//     }
-//     if (mParam.ocdnet_unclip_ratio <= 0)
-//     {
-//         std::cerr<<"[ERROR] The ocdnet_unclip_ratio should be large than 0"<<std::endl;
-//         return false;
-//     }
-
-//     return true;
-// }
-
-void nvOCDR::process(const nvOCDRInput &input, const nvOCDROutput *output)
+void nvOCDR::process(const nvOCDRInput &input, nvOCDROutput *const output)
 {
-    // todo(shuohanc) restore from chw or hwc, assume hwc for now.
-    mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel), input.data, cv::Mat::AUTO_STEP);
+    const auto start_t = std::chrono::high_resolution_clock::now();
+    
+    static cv::Scalar BGR_MEAN(104.00698793, 116.66876762, 122.67891434);
+    static cv::Scalar BGR_SCALE(0.00392156, 0.00392156, 0.00392156);
+
+    static cv::Scalar GRAY_MEAN(127.5);
+    static cv::Scalar GRAY_SCALE(0.00784313);
+
+    if (input.data_format == HWC)
+    {
+        mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel), input.data, cv::Mat::AUTO_STEP);
+
+        mInputImage.convertTo(mInputImage32F, CV_32FC(mInputImage.channels()));
+        // normalize
+        mInputImage32F -= BGR_MEAN;
+        mInputImage32F = mInputImage32F.mul(BGR_SCALE);
+
+        cv::cvtColor(mInputImage, mInputGrayImage, cv::COLOR_BGR2GRAY);
+        mInputGrayImage.convertTo(mInputGrayImage, CV_32F);
+
+        mInputGrayImage -= GRAY_MEAN;
+        mInputGrayImage = mInputGrayImage.mul(GRAY_SCALE);
+    }
+    else
+    {
+        // todo(shuohanc) restore from chw.
+        // mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel), input.data, cv::Mat::AUTO_STEP);
+    }
+
+    if (mInputImage.empty())
+    {
+        throw std::runtime_error("input empty");
+    }
+
     mOCDScoreMap = cv::Mat(cv::Size(input.width, input.height), CV_32F, cv::Scalar(0.F));
     mOCDValidCntMap = cv::Mat(cv::Size(input.width, input.height), CV_32F, cv::Scalar(0.F));
-
-    // todo(shuohanc) tile mode for now
+    // todo(shuohanc) tile mode for now,
+    // to be continued...
     processTile(input);
+
+    output->num_texts = mNumTexts;
+    output->texts = &mTexts[0];
+
+    auto duration = std::chrono::high_resolution_clock::now() - start_t;
+    std::cout << "process takes " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
 }
 
 void nvOCDR::processTile(const nvOCDRInput &input)
 {
-    const auto start_t = std::chrono::high_resolution_clock::now();
     const auto ocd_input_h = mOCDNet->getInputH();
     const auto ocd_input_w = mOCDNet->getInputW();
 
-    const auto tiles = getTilePlan(ocd_input_w, ocd_input_h, mInputImage.cols, mInputImage.rows, ocd_input_h - 120);
+    // parameterize stride ??
+    mTiles = getTilePlan(ocd_input_w, ocd_input_h, mInputImage.cols, mInputImage.rows, ocd_input_h - 120);
 
-    size_t num_tiles = tiles.size();
+    size_t num_tiles = mTiles.size();
     size_t num_ocd_bs = mOCDNet->getBatchSize();
     size_t num_ocd_runs = num_tiles % num_ocd_bs == 0 ? num_tiles / num_ocd_bs : num_tiles / num_ocd_bs + 1;
-    std::cout << "tiles: " << num_tiles << ", run " <<  num_ocd_runs << " times with batch size " << num_ocd_bs << "\n";
+    std::cout << "tiles: " << num_tiles << ", run ocd " << num_ocd_runs << " times with batch size " << num_ocd_bs << "\n";
 
+    // 1. ocd process
     for (size_t i = 0; i < num_ocd_runs; i++)
     {
         size_t start_idx = i * num_ocd_bs;
-        size_t end_idx = std::min(i * num_ocd_bs + num_ocd_bs, num_tiles);
+        size_t end_idx = std::min((i + 1) * num_ocd_bs, num_tiles);
 
-        preprocessTile(tiles, start_idx, end_idx);
+        preprocessOCDTile(start_idx, end_idx); // batch inference
         mOCDNet->syncMemory(true, true, mStream);
         mOCDNet->infer();
         mOCDNet->syncMemory(false, false, mStream);
-        postprocessTile(tiles, start_idx, end_idx);
-        cv::Mat mask;
-        threshold(mOCDScoreMap / mOCDValidCntMap, mask, mParam.ocd_param.binarize_threshold, 255, cv::THRESH_BINARY);
+        cudaStreamSynchronize(mStream);
+        postprocessOCDTile(start_idx, end_idx); // restore to image
+        cv::threshold(mOCDScoreMap / mOCDValidCntMap, mOCDOutputMask, mParam.process_param.binarize_threshold, 255U, cv::THRESH_BINARY);
     }
-    auto duration = std::chrono::high_resolution_clock::now() - start_t;
-    std::cout<< "process takes " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
+
+    // 2. ocr process
+    selectOCRCandidates();
+
+    size_t num_ocr_bs = mOCRNet->getBatchSize();
+    size_t num_ocr_runs = mNumTexts % num_ocr_bs == 0 ? mNumTexts / num_ocr_bs :  mNumTexts / num_ocr_bs + 1;
+    std::cout << "found text area number: " << mNumTexts << ", run ocr " << num_ocr_runs << " times with batch size " << num_ocr_bs << "\n";
+
+    for(size_t i = 0; i < num_ocr_runs; ++i) {
+        size_t start_idx = i * num_ocr_bs;
+        size_t end_idx = std::min((i + 1) * num_ocr_bs, mNumTexts);
+        preprocessOCR(start_idx, end_idx);
+        mOCRNet->syncMemory(true, true, mStream);
+        mOCRNet->infer();
+        mOCRNet->syncMemory(false, false, mStream);
+        cudaStreamSynchronize(mStream);
+        postprocessOCR(start_idx, end_idx);
+    }
 }
 
-void nvOCDR::postprocessTile(const std::vector<cv::Rect>& tiles, size_t start, size_t end) {
-    float *output_buf = static_cast<float *>(mBufManager.getBuffer(
+void nvOCDR::postprocessOCDTile(size_t start, size_t end)
+{
+    float *output_buf = reinterpret_cast<float *>(mBufManager.getBuffer(
         mOCDNet->getBufName(OCDNET_OUTPUT), true));
 
-    // !!! todo(shuohanc) use input size, cause they same for now
+    // !!! todo(shuohanc) use input size, cause they are same for now
     auto const output_h = mOCDNet->getInputH();
     auto const output_w = mOCDNet->getInputW();
-    size_t elem_size = output_h * output_w;
     for (size_t i = start; i < end; ++i)
     {
-        const auto &tile = tiles[i];
+        const auto &tile = mTiles[i];
         // std::cout<< tile << "\n";
         cv::Mat score(output_h, output_w, CV_32F, output_buf, cv::Mat::AUTO_STEP);
         cv::Mat mask;
-        mOCDScoreMap(tile) += score(cv::Rect(cv::Point(0, 0), tile.br() - tile.tl())) ;
+        mOCDScoreMap(tile) += score(cv::Rect(cv::Point(0, 0), tile.br() - tile.tl()));
         mOCDValidCntMap(tile) += 1;
-        output_buf += elem_size;
-
+        output_buf += output_h * output_w;
     }
 }
 
-void nvOCDR::preprocessTile(const std::vector<cv::Rect>& tiles, size_t start, size_t end)
+void nvOCDR::preprocessOCDTile(size_t start, size_t end)
 {
-    static cv::Scalar MEAN(104.00698793, 116.66876762, 122.67891434);
-    static cv::Scalar RGB_SCALE(0.00392156, 0.00392156, 0.00392156);
-
-    float* buf = reinterpret_cast<float*>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), true));
+    float *buf = reinterpret_cast<float *>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), true));
 
     const auto ocd_input_h = mOCDNet->getInputH();
     const auto ocd_input_w = mOCDNet->getInputW();
 
-    // fill ocd batch 
-    for (size_t j = start; j < end; j++) 
+    // fill ocd batch, and normalize
+    for (size_t j = start; j < end; j++)
     {
-        const auto &tile = tiles[j];
+        const auto &tile = mTiles[j];
         // 1 tile -> 1 batch in OCD
-        cv::Mat ocd_batch(cv::Size(ocd_input_w, ocd_input_h), CV_8UC(mInputImage.channels()), cv::Scalar(0, 0, 0));
-        mInputImage(tile).copyTo(ocd_batch(cv::Rect(cv::Point(0, 0), tile.br() - tile.tl())));
+        cv::Mat ocd_batch(cv::Size(ocd_input_w, ocd_input_h), CV_32FC3, cv::Scalar(0, 0, 0));
+        mInputImage32F(tile).copyTo(ocd_batch(cv::Rect(cv::Point(0, 0), tile.br() - tile.tl())));
 
-        ocd_batch.convertTo(ocd_batch, CV_32FC(mInputImage.channels()));
-        // normalize
-        ocd_batch -= MEAN;
-        ocd_batch = ocd_batch.mul(RGB_SCALE);
-
-        std::vector<cv::Mat> dummy_channel_buf;
+        std::vector<cv::Mat> dummy_channels;
         for (size_t c = 0; c < 3; ++c)
         {
-            dummy_channel_buf.emplace_back(ocd_input_h, ocd_input_w, CV_32F, buf);
+            dummy_channels.emplace_back(ocd_input_h, ocd_input_w, CV_32F, buf);
             buf += ocd_input_h * ocd_input_w;
         }
-        cv::split(ocd_batch, dummy_channel_buf);     
+        cv::split(ocd_batch, dummy_channels);
     }
-    
-    
 }
+
+void nvOCDR::selectOCRCandidates()
+{
+    mTexts.clear();
+    mTextCntrCandidates.clear();
+    mNumTexts = 0;
+
+    std::vector<std::vector<cv::Point>> raw_contours;
+
+    mOCDOutputMask.convertTo(mOCDOutputMask, CV_8U);
+    cv::findContours(mOCDOutputMask, raw_contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+    // filter out too small
+    float min_pixel_area = mParam.process_param.min_pixel_area;
+    std::copy_if(raw_contours.begin(), raw_contours.end(), std::back_inserter(mTextCntrCandidates),
+                 [&min_pixel_area](auto const &contour)
+                 {
+                     return cv::contourArea(contour) >= min_pixel_area;
+                 });
+
+    // sort by score, desc
+    std::sort(mTextCntrCandidates.begin(), mTextCntrCandidates.end(), [](auto const &contour_a, auto const &contour_b)
+              {
+        float score_a = cv::contourArea(contour_a) / cv::boundingRect(contour_a).area();
+        float score_b = cv::contourArea(contour_b) / cv::boundingRect(contour_b).area();
+        return score_a > score_b; });
+
+    for (size_t i = 0; i < std::min(mTextCntrCandidates.size(), mParam.process_param.max_candidate); ++i)
+    {
+        auto const &contour = mTextCntrCandidates[i];
+        float polygon_score = cv::contourArea(contour) / cv::boundingRect(contour).area();
+        if (polygon_score <= mParam.process_param.polygon_threshold)
+        {
+            break;
+        }
+        // !!! (todo) find better way to find minimum quadrilateral, use minAreaRect temporarily
+        auto rotated = cv::minAreaRect(contour);
+
+        static float long_side_scale = 2;
+        static float short_side_scale = 1.1;
+
+        cv::Size new_size = rotated.size;
+
+        // enlarge the text area
+        if (new_size.width > 2 * new_size.height)
+        {
+            new_size.height *= long_side_scale;
+            new_size.width *= short_side_scale;
+        }
+        else if (new_size.height > 2 * new_size.width)
+        {
+            new_size.width *= long_side_scale;
+            new_size.height *= short_side_scale;
+        }
+        else
+        {
+            new_size.width *= 2;
+            new_size.height *= 2;
+        }
+
+        rotated = cv::RotatedRect(rotated.center, new_size, rotated.angle);
+
+        // prepare output
+        auto &vertices = mQuadPts[i];
+        Text &text = mTexts[i];
+
+        rotated.points(&vertices[0]);
+
+        for (size_t j = 0; j < QUAD; ++j)
+        {
+            text.polygon[j * 2] = vertices[j].x;
+            text.polygon[j * 2 + 1] = vertices[j].y;
+        }
+        text.angle = rotated.angle;
+        mNumTexts += 1;
+    }
+}
+
+void nvOCDR::preprocessOCR(size_t start, size_t end)
+{
+    // fill the ocr input buffer
+    const auto ocr_input_h = mOCRNet->getInputH();
+    const auto ocr_input_w = mOCRNet->getInputW();
+
+    static std::array<cv::Point2f, QUAD> transform_dst{
+        cv::Point2f{0.F, static_cast<float>(ocr_input_h)},
+        cv::Point2f{0.F, 0.F},
+        cv::Point2f{static_cast<float>(ocr_input_w - 1), 0.F},
+        cv::Point2f{static_cast<float>(ocr_input_w - 1), static_cast<float>(ocr_input_h - 1)}};
+    static std::array<cv::Point2f, QUAD> transform_src;
+
+    float *buf = reinterpret_cast<float*>(mBufManager.getBuffer(mOCRNet->getBufName(OCRNET_INPUT), true));
+    for (size_t i = start; i < end; ++i)
+    {
+        auto const &quad_pts = mQuadPts[i];
+        cv::Rect rect = cv::boundingRect(quad_pts);
+
+        // https://namkeenman.wordpress.com/2015/12/18/open-cv-determine-angle-of-rotatedrect-minarearect/
+        auto const &p0 = quad_pts[0];
+        auto const &p1 = quad_pts[1];
+        auto const &p2 = quad_pts[2];
+        bool direction = cv::norm(p0 - p1) <= cv::norm(p1 - p2);
+
+        for (size_t j = 0; j < QUAD; ++j)
+        {
+            transform_src[j] = quad_pts[direction ? j : ((j + 3) % QUAD)] - cv::Point2f{
+                static_cast<float>(rect.tl().x), static_cast<float>(rect.tl().y)};
+        }
+        // compute perspective transform
+        cv::Mat h = cv::findHomography(transform_src, transform_dst);
+        cv::Mat text_roi(ocr_input_h, ocr_input_w, CV_32F, buf);
+
+        cv::warpPerspective(mInputGrayImage(rect), text_roi, h, cv::Size(ocr_input_w, ocr_input_h));
+        buf += ocr_input_h * ocr_input_w;
+        // cv::imwrite(std::to_string(i)+ ".png", text_roi);
+    }
+}
+
+void nvOCDR::postprocessOCR(size_t start, size_t end) {
+    for (size_t i = start; i < end; ++i)
+    {
+        Text &text = mTexts[i];
+        mOCRNet->decode(&text, i - start);
+    }
+}
+
 
 nvOCDR::nvOCDR(const nvOCDRParam &param) : mParam(param)
 {
-    // if (!paramCheck())
-    // {
-    //     std::cerr<<"[ERROR] The nvOCDR initialization failed due to wrong nvOCDRParam setting."<<std::endl;
-    //     exit(0);
-    // }
-    // std::cerr << "param check pass\n";
-
-    // BufferManager &buf_manager = BufferManager::Instance();
-    // buf_manager.initBuffer()
+    mTexts.resize(param.process_param.max_candidate);
+    mQuadPts.resize(param.process_param.max_candidate);
     cudaStreamCreate(&mStream);
 
     // mBuffMgr.mDeviceBuffer.clear();
@@ -221,12 +349,12 @@ nvOCDR::nvOCDR(const nvOCDRParam &param) : mParam(param)
     mOCDNet = std::make_unique<OCDNetEngine>(OCD_PREFIX, param.ocd_param);
     mOCDNet->init();
 
-    // warmup 
-    for(size_t i = 0; i < NUM_WARMUP_RUNS; ++i) {
-       // mOCRNet->infer(mStream);
-       mOCDNet->infer(mStream);
+    // warmup
+    for (size_t i = 0; i < NUM_WARMUP_RUNS; ++i)
+    {
+        // mOCRNet->infer(mStream);
+        mOCDNet->infer(mStream);
     }
-
 
     // mOCRNet =  std::move(std::unique_ptr<OCRNetEngine>(new OCRNetEngine(OCR_PREFIX)));
     // mOCRNet->init();

@@ -38,10 +38,6 @@ inline std::ostream& operator << (std::ostream& o, const Dims& dims) {
 template <typename T>
 using TRTUniquePtr = std::unique_ptr<T, InferDeleter>;
 
-// TRT Engine wrapper on TRT 8.5 API for version 0:
-// - Single input and multiple output
-// - Dynamic batch
-// - FP32 input & output
 template<typename Param>
 class TRTEngine
 {
@@ -57,38 +53,14 @@ class TRTEngine
         bool syncMemory(bool input, bool host2device, const cudaStream_t& stream);
         std::string getBufName(const std::string &name) {return mName + "_" + name; }
 
-        // Manager will only give a buffer with max size and let TRT Engine to use the buffer
-        // void setInputBuffer(void* buffer);
-
-        // void setInputShape(const Dims shape);
-
-        // size_t getMaxInputBufferSize();
-
-        // Dims getExactInputShape() {return mExactInputShape;};
-
-        // Dims getMaxInputShape() {return mMaxInputShape;};
-
-        // size_t getMaxBatchSize() {return mMaxBatchSize;};
-
-        // size_t getMaxOutputBufferSize();
-
-        // void setOutputBuffer(void* buffer);
-
-        // const void* getOutputAddr(std::string output_name);
-
-        // Dims getOutputShapeByName(std::string output_name);
-
-        // Get the size of memeory will be used by TensorRT engine internally
-        // int getInterMemSize();
         inline size_t getInputH () { return mInputH; };
         inline size_t getInputW () { return mInputW; };
         inline size_t getBatchSize() { return mBatchSize; }
+        nvinfer1::Dims getOutputDims(const std::string& name);
 
     protected:
         void setupInput(const std::string &input_name, const Dims& dims, bool host_buf = false);
         void setupOutput(const std::string &ouput_name, const Dims& dims, bool host_buf = false);
-
-
 
         Param mParam;
         std::string mName;
@@ -102,25 +74,14 @@ class TRTEngine
         size_t mBatchSize = 1U;
         size_t mInputH;
         size_t mInputW;
-        // std::string mInputName;
-        // Dims mMaxInputShape; // with bs
-        // size_t mMaxBatchSize;
-        // Dims mExactInputShape; // with bs
-        // std::vector<std::string> mOutputNames;
-        // std::vector<Dims> mMaxOutputShapes; // with bs
 
-        // std::unordered_map<std::string, Dims> mInputs; // from engine model
-        // std::unordered_map<std::string, Dims> mOutputs; // from engine model
         std::vector<std::string> mInputNames;
         std::vector<std::string> mOutputNames;
-        // std::map<std::string, std::string> mInputBufNames;
-        // std::map<std::string, std::string> mOutputBufNames;
+        std::map<std::string, nvinfer1::Dims> mInputDims;
+        std::map<std::string, nvinfer1::Dims> mOutputDims;
 };
 
 using OCRTRTEngine = TRTEngine<nvOCRParam>;
 using OCDTRTEngine = TRTEngine<nvOCDParam>;
-
-// template<> class TRTEngine<nvOCRParam>;
-
 
 }

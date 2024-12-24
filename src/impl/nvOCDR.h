@@ -1,5 +1,4 @@
-#ifndef __NVOCDR_CPP_HEADER__
-#define __NVOCDR_CPP_HEADER__
+#pragma once
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,14 +11,11 @@
 #include "MemManager.h"
 #include "OCRNetEngine.h"
 #include "OCDNetEngine.h"
-#include "RectEngine.h"
-
-
-// #define TRITON_DEBUG
 
 namespace nvocdr
 {
-static constexpr size_t NUM_WARMUP_RUNS = 3;
+static constexpr size_t NUM_WARMUP_RUNS = 10;
+static constexpr size_t QUAD = 4;
 
 
 //nvOCDR wrap the whole pipeline
@@ -57,35 +53,40 @@ class nvOCDR
         // void getResults(const nvOCDRInput& input, nvOCDROutputMeta * const output);
         // void addInput(const nvOCDRInput& input);
         // void getOuput(const nvOCDROutputMeta* output);
-        void process(const nvOCDRInput& input, const nvOCDROutput* output);
+        void process(const nvOCDRInput& input,  nvOCDROutput* const output);
         // void p(const nvOCDRInput& input);
 
 
     private:
         void processTile(const nvOCDRInput& input);
-        void preprocessTile(const std::vector<cv::Rect>& tiles, size_t start, size_t end);
-        void postprocessTile(const std::vector<cv::Rect>& tiles, size_t start, size_t end);
-        // void preprocessResize(const nvOCDR)
 
-        
-        cv::Mat mInputImage;
-        cv::Mat mOCDScoreMap;
-        cv::Mat mOCDValidCntMap;
+        void preprocessOCDTile(size_t start, size_t end);
+        void postprocessOCDTile(size_t start, size_t end);
 
-        cudaStream_t mStream;
-        // std::unique_ptr<OCDNetEngine> mOCDNet;
-        // Dims mOCDNetInputShape;
-        // int32_t mOCDNetMaxBatch;
+        void procesOCR();
+        void selectOCRCandidates();
+        void preprocessOCR(size_t start, size_t end);
+        void postprocessOCR(size_t start, size_t end);
+
         std::unique_ptr<OCRNetEngine> mOCRNet;
         std::unique_ptr<OCDNetEngine> mOCDNet;
-        // Dims mOCRNetInputShape;
-        // int32_t mOCRNetMaxBatch;
-        // std::unique_ptr<RectEngine> mRect;
-        // BufferManager mBuffMgr;
-        nvOCDRParam mParam;
         BufferManager & mBufManager = BufferManager::Instance();
+        
+        cv::Mat mInputImage; // origin input image
 
-        // bool isNHWC;
+        cv::Mat mInputImage32F; // input image, float32 format
+        cv::Mat mInputGrayImage; // input image, float32 and gray 
+        cv::Mat mOCDScoreMap;
+        cv::Mat mOCDOutputMask;
+        cv::Mat mOCDValidCntMap;
+
+        std::vector<cv::Rect> mTiles;
+        std::vector<std::vector<cv::Point>> mTextCntrCandidates;
+        std::vector<std::array<cv::Point2f, QUAD>> mQuadPts; 
+        std::vector<Text> mTexts;
+        size_t mNumTexts;
+
+        cudaStream_t mStream;
+        nvOCDRParam mParam;
 };
 }
-#endif

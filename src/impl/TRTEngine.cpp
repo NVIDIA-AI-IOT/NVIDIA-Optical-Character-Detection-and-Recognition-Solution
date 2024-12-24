@@ -48,7 +48,6 @@ bool TRTEngine<Param>::initEngine()
 
     initLibNvInferPlugins(&logger, "");
     mRuntime = std::move(TRTUniquePtr<IRuntime>(createInferRuntime(logger)));
-    // mRuntime = std::move(std::unique_ptr<IRuntime>(createInferRuntime(logger), InferDeleter()));
     //load binary engine:
     std::cerr << "load engine from:" << mParam.engine_file << "\n";
     std::ifstream engineFile(mParam.engine_file, std::ios::binary);
@@ -79,11 +78,9 @@ bool TRTEngine<Param>::initEngine()
         {
             mInputNames.push_back(tensor_name);
             engine_max_batch_size = mEngine->getProfileShape(tensor_name.c_str(), 0, OptProfileSelector::kMAX).d[0];
-            // std::cerr << "input " << 
+        } else {
+            mOutputNames.push_back(tensor_name);
         }
-        // {
-        //     mOutputNames.push_back(tensor_name);
-        // }
     }
 
     if (mParam.batch_size == 0) {
@@ -111,30 +108,32 @@ void TRTEngine<Param>::setupInput(const std::string &input_name, const Dims& dim
     mInputW = final_shape.d[3];
 
     mContext->setInputShape(name.c_str(), final_shape);
+    mInputDims[name] = final_shape;
     std::cerr << "model input '" << name << "', with shape: " << final_shape << "\n";
     mBufManager.initBuffer(getBufName(name), volume(final_shape) * sizeof(float), true, host_buf);
     mContext->setTensorAddress(name.c_str(), mBufManager.getBuffer(getBufName(name), false));
 }
 
 template<typename Param>
-void TRTEngine<Param>::setupOutput(const std::string &ouput_name, const Dims& dims, bool host_buf){
+void TRTEngine<Param>::setupOutput(const std::string &output_name, const Dims& dims, bool host_buf){
     // final shape = opt shape
-    mOutputNames.push_back(ouput_name);
-    std::cerr << "-------- setup output for name: " << ouput_name << "--------\n";
+    mOutputNames.push_back(output_name);
+    std::cerr << "-------- setup output for name: " << output_name << "--------\n";
 
-    auto final_shape = mEngine->getTensorShape(ouput_name.c_str());
+    auto final_shape = mEngine->getTensorShape(output_name.c_str());
     if (dims.nbDims != 0) { // if dims provided
-        // todo(shuohan) add check here if input dims bigger than max;
-        // auto const max_shape = mEngine->getTensorShape(ouput_name.c_str());
+        // todo(shuohan) add check here if input dims bigger than profile max;
+        // auto const max_shape = mEngine->getTensorShape(output_name.c_str());
     } else {  // if no dims provided, use max batch size + opt
         final_shape.d[0] = mBatchSize;
     }
-    // mContext->setOutputShape(ouput_name.c_str(), final_shape);
-    std::cerr << "model output '" << ouput_name << "', with shape: " << final_shape << "\n";
+    // mContext->setOutputShape(output_name.c_str(), final_shape);
+    std::cerr << "model output '" << output_name << "', with shape: " << final_shape << "\n";
 
-
-    mBufManager.initBuffer(getBufName(ouput_name), volume(final_shape) * sizeof(float), true, host_buf);
-    mContext->setTensorAddress(ouput_name.c_str(), mBufManager.getBuffer(getBufName(ouput_name), false));
+    // todo(shuohanc) hardcode for float for now, cause all our model has 32bit output
+    mBufManager.initBuffer(getBufName(output_name), volume(final_shape) * sizeof(float), true, host_buf);
+    mOutputDims[output_name] = final_shape;
+    mContext->setTensorAddress(output_name.c_str(), mBufManager.getBuffer(getBufName(output_name), false));
 }
 
 template<typename Param>
@@ -150,10 +149,19 @@ bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream
         if (host2device) { // host2device
           mBufManager.copyHostToDevice(getBufName(name), stream);
         } else { // device2host
+        //   std::cout<<"device to host " << name << "\n";
           mBufManager.copyDeviceToHost(getBufName(name), stream);
         }
     }
 
+}
+template<typename Param>
+nvinfer1::Dims TRTEngine<Param>::getOutputDims(const std::string& name) {
+    if (mOutputDims.count(name)) {
+        return mOutputDims[name];
+    } else {
+        throw std::runtime_error("not output name: " + name);
+    }
 }
 
 

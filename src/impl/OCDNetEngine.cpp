@@ -14,19 +14,7 @@ namespace nvocdr
         return true;
     }
 
-    void OCDNetEngine::process(const cudaStream_t &stream)
-    {
-        // mBufManager.getBuffer();
 
-        // blobFromImagesCUDA(input_data, output_data, input_shape, output_shape, mParam, stream);
-        // infer(stream);
-        // thresholdCUDA(buffer_mgr.mDeviceBuffer[mTRTOutputBufferIndex].data(), buffer_mgr.mDeviceBuffer[mOutputThresholdDevIdx].data(), ocdOutputPatchshape, mBinaryThreshold, stream);
-    }
-
-    void OCDNetEngine::postprocess(const cudaStream_t &stream)
-    {
-
-    }
 
     // float OCDNetEngine::contourScore(const Mat& binary, const vector<Point>& contour)
     // {

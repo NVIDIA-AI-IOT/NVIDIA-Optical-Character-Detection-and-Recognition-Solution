@@ -2,116 +2,73 @@
 #include <cuda_runtime.h>
 #include "nvocdr.h"
 
-namespace nvocdr {
-    using namespace nvocdr;
+namespace nvocdr
+{
+  using namespace nvocdr;
 
-namespace sample {
-    class OCDRInferenceSample {
+  namespace sample
+  {
+    class OCDRInferenceSample
+    {
     public:
       OCDRInferenceSample() = default;
-      OCDRInferenceSample(nvOCDRParam param) : m_param(param) {
-            // nvOCDRInput input;
-            // m_input.device_type = GPU;
-            // input.shape[0] = 1;
-            // input.shape[3] = 3;
-            m_handler = nvOCDR_initialize(m_param);
+      OCDRInferenceSample(nvOCDRParam param) : m_param(param)
+      {
+        m_handler = nvOCDR_initialize(m_param);
       };
-      
 
 
-      // void init() {
-      //   if (!m_handler) {
-              
-      //         std::cout<<  "init success\n";
-      //   } else {
-      //     std::cout<<  "skip init\n";
+      ~OCDRInferenceSample()
+      {      }
 
-      //   }
-      // }
+      cv::Mat visualize(const cv::Mat &img, const nvOCDROutput &texts, bool show_score = false,
+      bool show_text=true)
+      {
+        cv::Mat viz = img.clone();
 
-      ~OCDRInferenceSample() {
-        // nvOCDR_deinit(m_handler);
+        for (size_t i = 0; i < texts.num_texts; ++i)
+        {
+          const auto &text = texts.texts[i];
+          std::vector<cv::Point> pts(4);
+          for (size_t j = 0; j < 4; ++j)
+          {
+            cv::Point pt1(text.polygon[j * 2], text.polygon[j * 2 + 1]);
+            size_t next = (j + 1) % 4;
+            cv::Point pt2(text.polygon[next * 2], text.polygon[next * 2 + 1]);
+            cv::line(viz, pt1, pt2, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+            pts[j] = pt1;
+          }
+
+          if (text.text_length > 0)
+          {
+            if (show_score) {
+            cv::putText(viz, std::to_string(text.conf), pts[0], cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+            }
+            if (show_text) {
+            cv::putText(viz, std::string(text.text), pts[2], cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+            }
+          }
+        }
+        return viz;
       }
 
-      cv::Mat visualize(cv::Mat img, nvOCDROutput texts,
-              int input_width, int input_height)
-        {
-            // float scale_x = static_cast<float>(img.size().width) / static_cast<float>(input_width);
-            // float scale_y = static_cast<float>(img.size().height) / static_cast<float>(input_height);
-            // for(int i = 0; i < texts.text_cnt[0]; ++i)
-            // {
-            //     std::string output_text(texts.text_ptr[i].ch);
-            //     std::stringstream output_conf;
-            //     output_conf << std::fixed << std::setprecision(3) << texts.text_ptr[i].conf;
-            //     float x1 = texts.text_ptr[i].polys[0];
-            //     float y1 = texts.text_ptr[i].polys[1];
-            //     float x2 = texts.text_ptr[i].polys[2];
-            //     float y2 = texts.text_ptr[i].polys[3];
-            //     float x3 = texts.text_ptr[i].polys[4];
-            //     float y3 = texts.text_ptr[i].polys[5];
-            //     float x4 = texts.text_ptr[i].polys[6];
-            //     float y4 = texts.text_ptr[i].polys[7];
-            //     cv::line(img, cv::Point((int)(x1 * scale_x), (int)(y1 * scale_y)), cv::Point((int)(x2 * scale_x), (int)(y2 * scale_y)), cv::Scalar(0, 255, 0), 1);
-            //     cv::line(img, cv::Point((int)(x2 * scale_x), (int)(y2 * scale_y)), cv::Point((int)(x3 * scale_x), (int)(y3 * scale_y)), cv::Scalar(0, 255, 0), 1);
-            //     cv::line(img, cv::Point((int)(x3 * scale_x), (int)(y3 * scale_y)), cv::Point((int)(x4 * scale_x), (int)(y4 * scale_y)), cv::Scalar(0, 255, 0), 1);
-            //     cv::line(img, cv::Point((int)(x4 * scale_x), (int)(y4 * scale_y)), cv::Point((int)(x1 * scale_x), (int)(y1 * scale_y)), cv::Scalar(0, 255, 0), 1);
-            //     cv::putText(img, output_text, cv::Point(x4 * scale_x, y4 * scale_y), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 1);
-            // }
-            return img;
-        }
-        
-        void infer(const cv::Mat &img) {
-
-            // std::vector<uint8_t> buf(img.total() * img.elemSize());
-
-            // cv::Mat 
-            
-            nvOCDRInput input {
-                  .height = static_cast<size_t>(img.rows),
-                  .width = static_cast<size_t>(img.cols),
-                  .num_channel = 3,
-                  .data = img.data,
-                  .data_format = HWC
-            };
-            nvOCDROutput output;
-            nvOCDR_process(m_handler, input, &output);
-
-        }
-
-        // cv::Mat infer_visualize(const cv::Mat &img) {
-        //       nvOCDRInput input;
-        //       input.device_type = GPU;
-        //       input.shape[0] = 1;
-        //       input.shape[1] = img.size().height;
-        //       input.shape[2] = img.size().width;
-        //       input.shape[3] = 3;
-        //       size_t item_size = input.shape[1] * input.shape[2] * input.shape[3] * sizeof(uchar);
-        //       std::cout<< "input buffer size: " << item_size << "\n";
-        //       cudaMalloc(&input.mem_ptr, item_size);
-        //       cudaMemcpy(input.mem_ptr, reinterpret_cast<void*>(img.data), item_size, cudaMemcpyHostToDevice);
-
-        //       // Do inference
-        //       nvOCDROutputMeta output;
-        //       // simple inference
-        //       nvOCDR_inference(input, &output, m_handler);
-        //       std::cout<< "finish infer\n";
-
-        //       // Visualize the output
-        //       int offset = 0;
-        //       cv::Mat viz = visualize(img, output, input.shape[2], input.shape[1]);
-
-        //       // Destroy the resoures
-        //       free(output.text_ptr);
-        //       cudaFree(input.mem_ptr);
-        //       // 
-        //       return cv::Mat();
-        // }
-
+      nvOCDROutput infer(const cv::Mat &img)
+      {
+        nvOCDRInput input{
+            .height = static_cast<size_t>(img.rows),
+            .width = static_cast<size_t>(img.cols),
+            .num_channel = 3,
+            .data = img.data,
+            .data_format = HWC};
+        nvOCDROutput output;
+        nvOCDR_process(m_handler, input, &output);
+        return output;
+      }
 
     private:
       nvOCDRParam m_param;
-      void* m_handler = nullptr;
+      void *m_handler = nullptr;
       nvOCDRInput m_input;
     };
-}
+  }
 }
