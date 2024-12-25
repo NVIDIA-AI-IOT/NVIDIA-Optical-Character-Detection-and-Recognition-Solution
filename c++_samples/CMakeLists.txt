@@ -10,8 +10,8 @@ find_package(Boost COMPONENTS program_options REQUIRED)
 
 foreach(sample_name ${SAMPLE_NAMES})
     add_executable(${sample_name} ${sample_name}.cpp base_sample.hpp)
-    target_include_directories(${sample_name} PUBLIC ${CUDA_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)
-    target_link_libraries(${sample_name} PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} nvocdr)
+    target_include_directories(${sample_name} PRIVATE ${CUDA_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(${sample_name} PRIVATE ${OpenCV_LIBS} ${CUDA_LIBRARIES} nvocdr Boost::program_options)
 endforeach()
 
 # add_library(sample_lib SHARED base_sample.hpp)

@@ -47,6 +47,7 @@ class TRTEngine
         bool init();
         bool initEngine();
         virtual bool customInit() = 0;
+        bool postInit();
 
         // Do TRT-based inference with processed input and get output
         bool infer(const cudaStream_t& stream = 0);

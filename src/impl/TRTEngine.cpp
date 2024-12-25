@@ -5,14 +5,13 @@
 #include "TRTEngine.h"
 #include "NvInferPlugin.h"
 #include "NvInfer.h"
+#include <glog/logging.h>
 
 
 using namespace nvinfer1;
 
 namespace nvocdr
 {
-    
-
 inline size_t volume(const nvinfer1::Dims& dim)
 {
     size_t data_size = 1;
@@ -28,7 +27,7 @@ class Logger : public ILogger
     void log(Severity severity, const char* msg) noexcept override
     {
         // suppress info-level messages
-        if (severity <= Severity::kWARNING)
+        if (severity <= Severity::kERROR)
             std::cout << msg << std::endl;
     }
 } logger;
@@ -38,7 +37,19 @@ bool TRTEngine<Param>::init()
 {
     initEngine();
     customInit();
+    postInit();
     return true;
+}
+
+template<typename Param>
+bool  TRTEngine<Param>::postInit() {
+    for(auto const &name: mOutputNames) {
+        if (!mBufManager.checkBufferExist(getBufName(name))) {
+            LOG(WARNING) << "buffer for '" << name << "' not allocated, allocate maximam";
+            setupOutput(name, {}, false); // remove in model export
+
+        }
+    }
 }
 
 
@@ -49,11 +60,11 @@ bool TRTEngine<Param>::initEngine()
     initLibNvInferPlugins(&logger, "");
     mRuntime = std::move(TRTUniquePtr<IRuntime>(createInferRuntime(logger)));
     //load binary engine:
-    std::cerr << "load engine from:" << mParam.engine_file << "\n";
-    std::ifstream engineFile(mParam.engine_file, std::ios::binary);
+    LOG(INFO) << "load engine from:" << mParam.model_file;
+    std::ifstream engineFile(mParam.model_file, std::ios::binary);
     if (engineFile.good() == false)
     {
-        std::cerr << "Error reading serialized TensorRT engine: " << mParam.engine_file << std::endl;
+        LOG(ERROR) << "Error reading serialized TensorRT engine: " << mParam.model_file;
     }
     engineFile.seekg(0, std::ifstream::end);
     int64_t fsize = engineFile.tellg();
@@ -63,7 +74,7 @@ bool TRTEngine<Param>::initEngine()
     engineFile.read(reinterpret_cast<char*>(engineBlob.data()), fsize);
     if (!engineFile.good())
     {
-        std::cerr << "Error reading serialized TensorRT engine: " << mParam.engine_file << std::endl;
+        LOG(INFO) << "Error reading serialized TensorRT engine: " << mParam.model_file;
         throw std::runtime_error("Error reading serialized TensorRT engine");
     }
 
@@ -93,7 +104,7 @@ template<typename Param>
 void TRTEngine<Param>::setupInput(const std::string &input_name, const Dims& dims, bool host_buf ) {
     // final shape = opt shape
     std::string name = input_name == "" ? mInputNames[0] : input_name;
-    std::cerr << "-------- setup input for name: " << name << "--------\n";
+    LOG(INFO)  << "-------- setup input for name: " << name << "--------";
 
     auto final_shape = mEngine->getProfileShape(name.c_str(), 0, OptProfileSelector::kOPT);
 
@@ -109,16 +120,16 @@ void TRTEngine<Param>::setupInput(const std::string &input_name, const Dims& dim
 
     mContext->setInputShape(name.c_str(), final_shape);
     mInputDims[name] = final_shape;
-    std::cerr << "model input '" << name << "', with shape: " << final_shape << "\n";
-    mBufManager.initBuffer(getBufName(name), volume(final_shape) * sizeof(float), true, host_buf);
-    mContext->setTensorAddress(name.c_str(), mBufManager.getBuffer(getBufName(name), false));
+    LOG(INFO) << "model input '" << name << "', with shape: " << final_shape;
+    mBufManager.initBuffer(getBufName(name), volume(final_shape) * sizeof(float), host_buf);
+    mContext->setTensorAddress(name.c_str(), mBufManager.getBuffer(getBufName(name), BUFFER_TYPE::DEVICE));
 }
 
 template<typename Param>
 void TRTEngine<Param>::setupOutput(const std::string &output_name, const Dims& dims, bool host_buf){
     // final shape = opt shape
     mOutputNames.push_back(output_name);
-    std::cerr << "-------- setup output for name: " << output_name << "--------\n";
+    LOG(INFO) << "-------- setup output for name: " << output_name << "--------\n";
 
     auto final_shape = mEngine->getTensorShape(output_name.c_str());
     if (dims.nbDims != 0) { // if dims provided
@@ -128,12 +139,12 @@ void TRTEngine<Param>::setupOutput(const std::string &output_name, const Dims& d
         final_shape.d[0] = mBatchSize;
     }
     // mContext->setOutputShape(output_name.c_str(), final_shape);
-    std::cerr << "model output '" << output_name << "', with shape: " << final_shape << "\n";
+    LOG(INFO) << "model output '" << output_name << "', with shape: " << final_shape ;
 
     // todo(shuohanc) hardcode for float for now, cause all our model has 32bit output
-    mBufManager.initBuffer(getBufName(output_name), volume(final_shape) * sizeof(float), true, host_buf);
+    mBufManager.initBuffer(getBufName(output_name), volume(final_shape) * sizeof(float), host_buf);
     mOutputDims[output_name] = final_shape;
-    mContext->setTensorAddress(output_name.c_str(), mBufManager.getBuffer(getBufName(output_name), false));
+    mContext->setTensorAddress(output_name.c_str(), mBufManager.getBuffer(getBufName(output_name), BUFFER_TYPE::DEVICE));
 }
 
 template<typename Param>
@@ -149,7 +160,7 @@ bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream
         if (host2device) { // host2device
           mBufManager.copyHostToDevice(getBufName(name), stream);
         } else { // device2host
-        //   std::cout<<"device to host " << name << "\n";
+        //   std::cout<<"device to host " << name ;
           mBufManager.copyDeviceToHost(getBufName(name), stream);
         }
     }
@@ -170,7 +181,7 @@ template<typename Param>
 bool  TRTEngine<Param>::infer(const cudaStream_t& stream)
 {
     if (!mContext->enqueueV3(stream) ) {
-        std::cout << "enqueue failed!\n";
+        LOG(ERROR) << "enqueue failed!";
     };
     return true;
 }

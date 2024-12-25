@@ -24,7 +24,10 @@ class OCRNetEngine: public OCRTRTEngine
         void decode(Text * const text, size_t idx);
 
     private:
-        void decodeCTC( Text * const text, size_t idx);
+        void decodeCTC(Text * const text, size_t idx);
+        void decodeATTNOrCLIP(Text * const text, size_t idx, const std::string& ending);
+        void loadDict();
+        // void decodeCLIP(Text * const text, size_t idx);
         size_t mOutputCharLength;
         std::vector<std::string> mDict;
 };

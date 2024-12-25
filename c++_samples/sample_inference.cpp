@@ -1,23 +1,27 @@
 #include "base_sample.hpp"
 // #include "boost/program_options.h"
 
-int main() {
-    nvOCDRParam param;
+int main(int argc, char** argv) {
+    // nvOCDRParam param;
 
-    param.input_data_format = HWC;
+    // param.input_data_format = HWC;
 
-    param.process_param.binarize_threshold = 0.1;
-    param.process_param.polygon_threshold = 0.3;
-    param.process_param.max_candidate = 1000;
-    param.process_param.min_pixel_area = 10;
+    // param.process_param.binarize_threshold = 0.1;
+    // param.process_param.polygon_threshold = 0.3;
+    // param.process_param.max_candidate = 1000;
+    // param.process_param.min_pixel_area = 10;
 
-    param.ocd_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocdnet.fp16.engine";
+    // param.ocd_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocdnet.fp16.engine";
 
-    param.ocr_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocrnet.fp16.engine";
-    param.ocr_param.dict_file = (char *)"/home/csh/nvocdr/onnx_models/character_list.txt";
+    // param.ocr_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocrnet.fp16.engine";
+    // param.ocr_param.dict_file = (char *)"/home/csh/nvocdr/onnx_models/character_list.txt";
 
 
-    nvocdr::sample::OCDRInferenceSample sample(param);
+    nvocdr::sample::OCDRInferenceSample sample;
+    if(!sample.parse_args(argc, argv)) {
+        return 1;
+    };
+    sample.initialize();
 
     std::string img_path = "/home/csh/nvocdr/c++_samples/test_img/scene_text.jpg";
     std::string img_path2 = "/home/csh/nvocdr/c++_samples/test_img/doc.jpg";

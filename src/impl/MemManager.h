@@ -207,14 +207,19 @@ using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 
 //Helper class that control all the mem used in the lib
 //Version 0 
+enum BUFFER_TYPE {
+    DEVICE,
+    HOST
+};
 class BufferManager
 {
     public:
-        void initBuffer(const std::string& name, const size_t& size, bool device = true, bool host = true);
-        void* getBuffer(const std::string & name, bool on_host);
+        void initBuffer(const std::string& name, const size_t& size, bool host_buf = true);
+        void* getBuffer(const std::string & name, BUFFER_TYPE buf_type);
+        bool checkBufferExist(const std::string & name) {return mDeviceBuffer.count(name) > 0;};
         size_t getBufferSize(const std::string& name);
-        void copyDeviceToHost(const std::string &name, const cudaStream_t& stream, bool async = true);
-        void copyHostToDevice(const std::string &name, const cudaStream_t& stream, bool async = true);
+        void copyDeviceToHost(const std::string &name, const cudaStream_t& stream);
+        void copyHostToDevice(const std::string &name, const cudaStream_t& stream);
 
         static BufferManager& Instance() {
           static BufferManager singleton;
@@ -222,11 +227,7 @@ class BufferManager
         }
         BufferManager(const BufferManager &) = delete;
         BufferManager & operator = (const BufferManager &) = delete;
-        // int initDeviceBuffer(const size_t size, const size_t item_size);
-        // int initHostBuffer(const size_t size, const size_t item_size);
 
-        // std::vector<DeviceBuffer> mDeviceBuffer;
-        // std::vector<HostBuffer> mHostBuffer;
     private:
       BufferManager() {}
       ~BufferManager() {}

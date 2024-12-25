@@ -1,23 +1,24 @@
 #include <iostream>
 #include "MemManager.h"
+#include <glog/logging.h>
 
 namespace nvocdr
 {
-void BufferManager::initBuffer(const std::string &name, const size_t& size, bool device, bool host) {
+void BufferManager::initBuffer(const std::string &name, const size_t& size, bool host_buf) {
     // todo(shuohan) check if double init
-    if (device && !mDeviceBuffer.count(name)) {
+    if (!mDeviceBuffer.count(name)) {
         mDeviceBuffer[name].resize(size);
-        std::cerr << "init device buffer for '" << name << "' with bytes: " << size << "\n"; 
+        LOG(INFO) << "init device buffer for '" << name << "' with bytes: " << size << "\n"; 
         mNumBytes[name] = size;
     }
-    if (host && !mHostBuffer.count(name)) {
+    if (host_buf && !mHostBuffer.count(name)) {
         mHostBuffer[name].resize(size);
-        std::cerr << "init host buffer for '" << name << "' with bytes: " << size << "\n"; 
+        LOG(INFO) << "init host buffer for '" << name << "' with bytes: " << size << "\n"; 
     }
 }
 
-void* BufferManager::getBuffer(const std::string & name, bool on_host) {
-    if (on_host) {
+void* BufferManager::getBuffer(const std::string & name, BUFFER_TYPE buf_type) {
+    if (buf_type == BUFFER_TYPE::HOST) {
         if (mHostBuffer.count(name)) {
             return mHostBuffer.at(name).data();
         } else {
@@ -31,14 +32,14 @@ void* BufferManager::getBuffer(const std::string & name, bool on_host) {
         }
     }
 }
-void BufferManager::copyDeviceToHost(const std::string &name, const cudaStream_t& stream, bool async) {
+void BufferManager::copyDeviceToHost(const std::string &name, const cudaStream_t& stream) {
     if (mHostBuffer.count(name) && mDeviceBuffer.count(name)) {
-        checkCudaErrors(cudaMemcpyAsync(getBuffer(name, true), getBuffer(name, false), mNumBytes[name], cudaMemcpyDeviceToHost, stream));
+        checkCudaErrors(cudaMemcpyAsync(getBuffer(name, BUFFER_TYPE::HOST), getBuffer(name, BUFFER_TYPE::DEVICE), mNumBytes[name], cudaMemcpyDeviceToHost, stream));
     }
 }
-void BufferManager::copyHostToDevice(const std::string &name, const cudaStream_t& stream, bool async) {
+void BufferManager::copyHostToDevice(const std::string &name, const cudaStream_t& stream) {
     if (mHostBuffer.count(name) && mDeviceBuffer.count(name)) {
-        checkCudaErrors(cudaMemcpyAsync(getBuffer(name, false), getBuffer(name, true), mNumBytes[name], cudaMemcpyHostToDevice, stream));
+        checkCudaErrors(cudaMemcpyAsync(getBuffer(name, BUFFER_TYPE::DEVICE), getBuffer(name, BUFFER_TYPE::HOST), mNumBytes[name], cudaMemcpyHostToDevice, stream));
     }
 }
 
@@ -48,4 +49,5 @@ size_t  BufferManager::getBufferSize(const std::string& name) {
     }   
     return 0;
 }
+
 } // namespace nvocdr

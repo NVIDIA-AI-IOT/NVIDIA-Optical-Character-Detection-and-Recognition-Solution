@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <chrono>
-#define DEBUG 0
+#include <glog/logging.h>
 
 using namespace nvocdr;
 
@@ -39,7 +39,7 @@ void nvOCDR::process(const nvOCDRInput &input, nvOCDROutput *const output)
     static cv::Scalar GRAY_MEAN(127.5);
     static cv::Scalar GRAY_SCALE(0.00784313);
 
-    if (input.data_format == HWC)
+    if (input.data_format == DATAFORMAT_TYPE_HWC)
     {
         mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel), input.data, cv::Mat::AUTO_STEP);
 
@@ -75,7 +75,7 @@ void nvOCDR::process(const nvOCDRInput &input, nvOCDROutput *const output)
     output->texts = &mTexts[0];
 
     auto duration = std::chrono::high_resolution_clock::now() - start_t;
-    std::cout << "process takes " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
+    LOG(INFO) << "process takes " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
 }
 
 void nvOCDR::processTile(const nvOCDRInput &input)
@@ -89,7 +89,7 @@ void nvOCDR::processTile(const nvOCDRInput &input)
     size_t num_tiles = mTiles.size();
     size_t num_ocd_bs = mOCDNet->getBatchSize();
     size_t num_ocd_runs = num_tiles % num_ocd_bs == 0 ? num_tiles / num_ocd_bs : num_tiles / num_ocd_bs + 1;
-    std::cout << "tiles: " << num_tiles << ", run ocd " << num_ocd_runs << " times with batch size " << num_ocd_bs << "\n";
+    LOG(INFO) << "tiles: " << num_tiles << ", run ocd " << num_ocd_runs << " times with batch size " << num_ocd_bs;
 
     // 1. ocd process
     for (size_t i = 0; i < num_ocd_runs; i++)
@@ -111,7 +111,7 @@ void nvOCDR::processTile(const nvOCDRInput &input)
 
     size_t num_ocr_bs = mOCRNet->getBatchSize();
     size_t num_ocr_runs = mNumTexts % num_ocr_bs == 0 ? mNumTexts / num_ocr_bs :  mNumTexts / num_ocr_bs + 1;
-    std::cout << "found text area number: " << mNumTexts << ", run ocr " << num_ocr_runs << " times with batch size " << num_ocr_bs << "\n";
+    LOG(INFO) << "found text area number: " << mNumTexts << ", run ocr " << num_ocr_runs << " times with batch size " << num_ocr_bs;
 
     for(size_t i = 0; i < num_ocr_runs; ++i) {
         size_t start_idx = i * num_ocr_bs;
@@ -128,7 +128,7 @@ void nvOCDR::processTile(const nvOCDRInput &input)
 void nvOCDR::postprocessOCDTile(size_t start, size_t end)
 {
     float *output_buf = reinterpret_cast<float *>(mBufManager.getBuffer(
-        mOCDNet->getBufName(OCDNET_OUTPUT), true));
+        mOCDNet->getBufName(OCDNET_OUTPUT), BUFFER_TYPE::HOST));
 
     // !!! todo(shuohanc) use input size, cause they are same for now
     auto const output_h = mOCDNet->getInputH();
@@ -147,7 +147,7 @@ void nvOCDR::postprocessOCDTile(size_t start, size_t end)
 
 void nvOCDR::preprocessOCDTile(size_t start, size_t end)
 {
-    float *buf = reinterpret_cast<float *>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), true));
+    float *buf = reinterpret_cast<float *>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), BUFFER_TYPE::HOST));
 
     const auto ocd_input_h = mOCDNet->getInputH();
     const auto ocd_input_w = mOCDNet->getInputW();
@@ -260,7 +260,7 @@ void nvOCDR::preprocessOCR(size_t start, size_t end)
         cv::Point2f{static_cast<float>(ocr_input_w - 1), static_cast<float>(ocr_input_h - 1)}};
     static std::array<cv::Point2f, QUAD> transform_src;
 
-    float *buf = reinterpret_cast<float*>(mBufManager.getBuffer(mOCRNet->getBufName(OCRNET_INPUT), true));
+    float *buf = reinterpret_cast<float*>(mBufManager.getBuffer(mOCRNet->getBufName(OCRNET_INPUT), BUFFER_TYPE::HOST));
     for (size_t i = start; i < end; ++i)
     {
         auto const &quad_pts = mQuadPts[i];
@@ -341,11 +341,11 @@ nvOCDR::nvOCDR(const nvOCDRParam &param) : mParam(param)
     // std::cerr << "init ocr from:" << ocr_engine_path << "\n";
 
     // std::string ocr_dict_path(param.ocrnet_dict_file);
-    std::cerr << "==== init ocr ====\n";
+    LOG(INFO) << "==== init ocr ====";
     mOCRNet = std::make_unique<OCRNetEngine>(OCR_PREFIX, param.ocr_param);
     mOCRNet->init();
 
-    std::cerr << "==== init ocd ====\n";
+    LOG(INFO) << "==== init ocd ====";
     mOCDNet = std::make_unique<OCDNetEngine>(OCD_PREFIX, param.ocd_param);
     mOCDNet->init();
 
