@@ -4,51 +4,56 @@
 #include <boost/program_options.hpp>
 namespace nvocdr
 {
-namespace po = boost::program_options;
+  namespace po = boost::program_options;
 
   namespace sample
   {
-    static nvOCDRParam DEFAULT_PARAM {
-      .ocd_param = {
-        .model_file = '\0',
-        .batch_size = 0
-      },
-      .ocr_param = {
-        .model_file = '\0',
-        .dict = '\0',
-        .batch_size = 0,
-        .mode = nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CTC
-      },
-      .process_param {
-        .strategy = STRATEGY_TYPE_SMART,
-        .max_candidate = 200,
-        .polygon_threshold = 0.3F,
-        .binarize_threshold = 0.1F,
-        .min_pixel_area = 10
-      }
-    };
+    static nvOCDRParam DEFAULT_PARAM{
+        .ocd_param = {
+            .model_file = '\0',
+            .batch_size = 0,
+            .type = nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL
+        },
+        .ocr_param = {
+          .model_file = '\0', 
+          .dict = '\0', 
+          .batch_size = 0, 
+          .type = nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC
+        },
+        .process_param{
+          .strategy = STRATEGY_TYPE_SMART, 
+          .max_candidate = 200, 
+          .polygon_threshold = 0.3F, 
+          .binarize_lower_threshold = 0.F, 
+          .binarize_upper_threshold = 0.1F, 
+          .min_pixel_area = 10,
+          .debug_log = false,
+          .debug_image = false,
+          .all_direction = false
+        }
+      };
     class OCDRInferenceSample
     {
     public:
       OCDRInferenceSample() = default;
-      void initialize() 
+      void initialize()
       {
         mHandler = nvOCDR_initialize(mParam);
       };
 
-
       ~OCDRInferenceSample()
-      {   }
+      {
+      }
 
-      cv::Mat visualize(const cv::Mat &img, const nvOCDROutput &texts, bool show_score = false,
-      bool show_text=true)
+      cv::Mat visualize(const cv::Mat &img, const nvOCDROutput &texts)
       {
         cv::Mat viz = img.clone();
 
         for (size_t i = 0; i < texts.num_texts; ++i)
         {
           const auto &text = texts.texts[i];
-          std::vector<cv::Point> pts(4);
+
+          std::array<cv::Point, 4> pts;
           for (size_t j = 0; j < 4; ++j)
           {
             cv::Point pt1(text.polygon[j * 2], text.polygon[j * 2 + 1]);
@@ -60,11 +65,23 @@ namespace po = boost::program_options;
 
           if (text.text_length > 0)
           {
-            if (show_score) {
-            cv::putText(viz, std::to_string(text.conf), pts[0], cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+            bool direction = cv::norm(pts[0] - pts[1]) <= cv::norm(pts[1] - pts[2]);
+
+            if (!direction)
+            {
+              cv::Point2f tmp = pts[3];
+              pts[3] = pts[2];
+              pts[2] = pts[1];
+              pts[1] = pts[0];
+              pts[0] = tmp;
             }
-            if (show_text) {
-            cv::putText(viz, std::string(text.text), pts[2], cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+            if (mShowScore)
+            {
+              cv::putText(viz, std::to_string(text.conf), (pts[1] + pts[2]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+            }
+            if (mShowText)
+            {
+              cv::putText(viz, std::string(text.text), (pts[0] + pts[3]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
             }
           }
         }
@@ -76,7 +93,7 @@ namespace po = boost::program_options;
         nvOCDRInput input{
             .height = static_cast<size_t>(img.rows),
             .width = static_cast<size_t>(img.cols),
-            .num_channel = img.channels(),
+            .num_channel = static_cast<size_t>(img.channels()),
             .data = img.data,
             .data_format = DATAFORMAT_TYPE_HWC};
         nvOCDROutput output;
@@ -84,53 +101,117 @@ namespace po = boost::program_options;
         return output;
       }
 
-      bool parse_args(int argc, char** argv) {
-          po::options_description desc("nvOCDR options");
-          desc.add_options()
-               ("help", "produce help message")
-               ("max_candidates", po::value<size_t>(&mParam.process_param.max_candidate)->default_value(100), "maximuam texts to output, if detects exceed this value, lower score ones will be ignored")
-               ("ocd_model", po::value<std::string>(), "optical charactor detection model, onnx or engine")
-               ("ocr_model", po::value<std::string>(), "optical charactor recognition model, onnx or engine")
-               ("ocr_dicts", po::value<std::string>()->default_value("default"), "dictionary for ocr model, txt file. if 'default' was given, use 0-9a-z")
-               ;
+      bool parse_args(int argc, char **argv)
+      {
+        po::options_description desc("nvOCDR sample options");
+        desc.add_options()
+        ("help", "produce help message")
+        ("image", po::value<std::string>(&mImagePath), "input image to run test")
+        ("strategy", po::value<std::string>()->default_value("smart"), "strategy")
+        ("rec_all_direction", po::value<bool>(&mParam.process_param.all_direction)->default_value(false), "use 4 direction to recognize and use best, consume more time")
+        ("text_polygon_thresh", po::value<float>(&mParam.process_param.polygon_threshold)->default_value(.3), "threshold for text area polygon")
+        ("binary_lower_bound", po::value<float>(&mParam.process_param.binarize_lower_threshold)->default_value(0), "lower bound for binary mask thresholding")
+        ("binary_upper_bound", po::value<float>(&mParam.process_param.binarize_upper_threshold)->default_value(0.1), "lower bound for binary mask thresholding")
+        ("debug_log", po::value<bool>(&mParam.process_param.debug_log)->default_value(false), "print debug log also")
+        ("debug_image", po::value<bool>(&mParam.process_param.debug_image)->default_value(false), "save debug image")
+        ("max_candidates", po::value<size_t>(&mParam.process_param.max_candidate)->default_value(100), "maximuam texts to output, if detects exceed this value, lower score ones will be ignored")
+        ("ocd_model", po::value<std::string>()->required(), "optical charactor detection model, onnx or engine")
+        ("ocr_model", po::value<std::string>()->required(), "optical charactor recognition model, onnx or engine")
+        ("ocr_dicts", po::value<std::string>()->default_value("default"), "dictionary for ocr model, txt file. if 'default' was given, use 0-9a-z")
+        ("ocr_type", po::value<std::string>()->default_value("CTC"), "the model type you set for ocr_model, choose from CTC/ATTN/CLIP")
+        ("ocd_type", po::value<std::string>()->default_value("normal"), "the model type you set for ocd_model, choose from normal/mixnet")
+        ("show_text", po::value<bool>(&mShowText)->default_value(true), "viz text")
+        ("show_score", po::value<bool>(&mShowScore)->default_value(false), "viz score also")
+        ;
 
-          po::variables_map vm;
-          po::store(po::parse_command_line(argc, argv, desc), vm);
-          po::notify(vm);    
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);
 
-          if (vm.count("help")) {
-              std::cout << desc << "\n";
-              return false;
-          }
-          if (vm.count("ocd_model") && vm.count("ocr_model")) {
-            std::string ocd_model = vm["ocd_model"].as<std::string>();
-            std::string ocr_model = vm["ocr_model"].as<std::string>();
+        if (vm.count("help"))
+        {
+          std::cout << desc << "\n";
+          return false;
+        }
+        if (!parseStrArgs(vm, "ocd_model", mParam.ocd_param.model_file))
+        {
+          std::cerr << "parse failed for ocd_model";
+          return false;
+        }
+        if (!parseStrArgs(vm, "ocr_model", mParam.ocr_param.model_file))
+        {
+          std::cerr << "parse failed for ocr_model";
+          return false;
+        }
+        if (!parseStrArgs(vm, "ocr_dicts", mParam.ocr_param.dict))
+        {
+          std::cerr << "parse failed for ocr_dicts";
+          return false;
+        }
 
-            if (ocd_model.length() > MAX_FILE_PATH || ocr_model.length() > MAX_FILE_PATH) {
-              std::cout<< "path too long";
-            }
-            strcpy(mParam.ocd_param.model_file, ocd_model.c_str());
-            strcpy(mParam.ocr_param.model_file, ocr_model.c_str());
-          }
-          std::string ocr_dicts = vm["ocr_dicts"].as<std::string>();
+        // strategy
+        auto strategy = vm["strategy"].as<std::string>();
+        if (strategy == "smart") {
+          mParam.process_param.strategy = STRATEGY_TYPE_SMART;
+        } else if(strategy == "resize") {
+          mParam.process_param.strategy = STRATEGY_TYPE_RESIZE_TILE;
+        } else if (strategy == "noresize"){
+          mParam.process_param.strategy = STRATEGY_TYPE_NORESIZE_TILE;
+        } else{
+          std::cerr << "strategy not supported " <<  strategy <<"\n";
+          return false;
+        }
 
-          // ocr_dicts
-          if (ocr_dicts.length() > MAX_FILE_PATH) {
-              std::cout<< "path too long";
-          }
-          strcpy(mParam.ocr_param.dict, ocr_dicts.c_str());
+        // ocr model type
+        auto ocr_type = vm["ocr_type"].as<std::string>();
+        if (ocr_type == "CTC") {
+          mParam.ocr_param.type = nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC;
+        } else if(ocr_type == "ATTN") {
+          mParam.ocr_param.type = nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN;
+        } else if(ocr_type == "CLIP") {
+          mParam.ocr_param.type = nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP;
+        } else{
+          std::cerr << "ocr_type not supported " << ocr_type << "\n";
+          return false;
+        }
 
-          // max_candidates
-          // mParam.process_param.max_candidate = 
+        // ocd model type
+        auto ocd_type = vm["ocd_type"].as<std::string>();
+        if (ocd_type == "normal") {
+          mParam.ocd_param.type = nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL;
+        } else if(ocd_type == "mixnet") {
+          mParam.ocd_param.type = nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET;
+        } else{
+          std::cerr << "ocd_type not supported " << ocd_type << "\n";
+          return false;
+        }
 
-          
-          return true;
+
+        return true;
       }
+      std::string mImagePath;
 
     private:
+      static bool parseStrArgs(const po::variables_map &vm, const std::string name, char *const dst)
+      {
+        if (vm.count(name))
+        {
+          std::string opt = vm[name].as<std::string>();
+          if (opt.length() > MAX_FILE_PATH)
+          {
+            std::cout << "path too long for " << name;
+            return false;
+          }
+          strcpy(dst, opt.c_str());
+          return true;
+        }
+        return false;
+      }
+
       void *mHandler = nullptr;
       nvOCDRParam mParam = DEFAULT_PARAM;
+      bool mShowScore;
+      bool mShowText;
     };
   };
 }
-

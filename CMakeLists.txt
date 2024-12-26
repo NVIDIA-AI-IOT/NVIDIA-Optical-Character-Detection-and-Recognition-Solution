@@ -7,19 +7,19 @@ find_package(glog REQUIRED)
 
 
 if(OpenCV_FOUND)
-    message("Found OpenCV, includes: " ${OpenCV_INCLUDE_DIRS})
+    message("Found OpenCV, includes headers: " ${OpenCV_INCLUDE_DIRS})
 else()
     message(FATAL_ERROR  "OpenCV not found!!!")
 endif()
 
 if(CUDA_FOUND)
-    message("Found CUDA, includes" ${CUDA_INCLUDE_DIRS})
+    message("Found CUDA, include headers:" ${CUDA_INCLUDE_DIRS})
 else()
     message(FATAL_ERROR  "cuda not found!!!")
 endif()
 
 if(glog_FOUND)
-   message("Found GLOG")
+   message("Found GLOG, version: " ${glog_VERSION})
 else()
    message(FATAL_ERROR  "glog not found!!!")
 endif()

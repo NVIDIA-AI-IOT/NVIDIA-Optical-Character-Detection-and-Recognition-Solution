@@ -15,16 +15,16 @@ bool OCRNetEngine::customInit()
     mDict.clear();
 
     // todo(shuohanc) could we move this to dict file and release with models, cause the dict also change when we add more charactors?
-    if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CTC)
+    if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC)
     {
         mDict.emplace_back("CTCBlank");
     }
-    else if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_ATTN)
+    else if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN)
     {
         mDict.emplace_back("[GO]");
         mDict.emplace_back("[s]");
     }
-    else if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CLIP)
+    else if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP)
     {
         mDict.emplace_back("[E]");
     }
@@ -35,7 +35,7 @@ bool OCRNetEngine::customInit()
 
     loadDict();
 
-    if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CLIP)
+    if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP)
     {
         mDict.emplace_back("[B]");
         mDict.emplace_back("[P]");
@@ -90,15 +90,15 @@ void OCRNetEngine::loadDict()
 }
 void OCRNetEngine::decode(Text *const text, size_t idx)
 {
-    if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CTC)
+    if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC)
     {
         decodeCTC(text, idx);
     }
-    else if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_ATTN)
+    else if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN)
     {
         decodeATTNOrCLIP(text, idx, "[s]");
     }
-    else if (mParam.mode == nvOCRParam::OCR_DECODE_TYPE::DECODE_TYPE_CLIP)
+    else if (mParam.type== nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP)
     {
         decodeATTNOrCLIP(text, idx, "[E]");
     }
@@ -122,11 +122,17 @@ void OCRNetEngine::decodeCTC(Text *const text, size_t idx)
         score *= prob[i];
         i = j - 1;
     }
-    memcpy(text->text, ret.c_str(), ret.length());
-    text->text[ret.length()] = '\0';
 
-    text->text_length = ret.length();
-    text->conf = score;
+    // we may recognize multi times, use best
+    if (score > text->conf) {
+        memcpy(text->text, ret.c_str(), ret.length());
+        text->text[ret.length()] = '\0';
+
+        text->text_length = ret.length();
+        text->conf = score;
+    }
+
+
 }
 
 void OCRNetEngine::decodeATTNOrCLIP(Text *const text, size_t idx, const std::string &ending)
@@ -184,7 +190,7 @@ void OCRNetEngine::decodeATTNOrCLIP(Text *const text, size_t idx, const std::str
 //                 output_id.size() * sizeof(int), cudaMemcpyDeviceToHost, stream);
 
 // std::vector<std::pair<std::string, float>> temp_de_texts;
-// if (mParam.mode == CTC)
+// if (mParam.type== CTC)
 // {
 //     for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
 //     {
@@ -221,7 +227,7 @@ void OCRNetEngine::decodeATTNOrCLIP(Text *const text, size_t idx, const std::str
 //         temp_de_texts.emplace_back(std::make_pair(de_text, prob));
 //     }
 // }
-// else if (mParam.mode == Attention)
+// else if (mParam.type== Attention)
 // {
 //     for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
 //     {
@@ -244,7 +250,7 @@ void OCRNetEngine::decodeATTNOrCLIP(Text *const text, size_t idx, const std::str
 //         temp_de_texts.emplace_back(std::make_pair(de_text, prob));
 //     }
 // }
-// else if (mParam.mode == CLIP)
+// else if (mParam.type== CLIP)
 // {
 //     for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
 //     {

@@ -45,7 +45,7 @@ template<typename Param>
 bool  TRTEngine<Param>::postInit() {
     for(auto const &name: mOutputNames) {
         if (!mBufManager.checkBufferExist(getBufName(name))) {
-            LOG(WARNING) << "buffer for '" << name << "' not allocated, allocate maximam";
+            LOG(WARNING) << "buffer for '" << name << "' not allocated, allocate to max";
             setupOutput(name, {}, false); // remove in model export
 
         }

@@ -3,15 +3,44 @@
 #include <opencv4/opencv2/dnn.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
 #include <opencv4/opencv2/highgui.hpp>
-
+#include "glog/logging.h"
 namespace nvocdr
 {
 
     bool OCDNetEngine::customInit()
     {
         setupInput(OCDNET_INPUT, {}, true);
-        setupOutput(OCDNET_OUTPUT, {}, true);
+
+        // todo, unify output name, and remove this hack
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+            mOutputName = "fy_preds";
+        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+            mOutputName = "pred";
+        } 
+        setupOutput(mOutputName, {}, true);
+
         return true;
+    }
+
+    float* OCDNetEngine::getMaskOutputBuf() {
+        return reinterpret_cast<float *>(mBufManager.getBuffer(getBufName(mOutputName), 
+                       BUFFER_TYPE::HOST));
+                        
+    }
+
+    size_t OCDNetEngine::getOutputChannelIdx() {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+            return 1;
+        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+            return 0;
+        }  
+    }
+    size_t OCDNetEngine::getOutputChannels() {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+            return 4;
+        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+            return 1;
+        }  
     }
 
 

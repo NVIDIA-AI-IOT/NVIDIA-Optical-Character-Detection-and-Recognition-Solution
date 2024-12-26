@@ -2,38 +2,25 @@
 // #include "boost/program_options.h"
 
 int main(int argc, char** argv) {
-    // nvOCDRParam param;
-
-    // param.input_data_format = HWC;
-
-    // param.process_param.binarize_threshold = 0.1;
-    // param.process_param.polygon_threshold = 0.3;
-    // param.process_param.max_candidate = 1000;
-    // param.process_param.min_pixel_area = 10;
-
-    // param.ocd_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocdnet.fp16.engine";
-
-    // param.ocr_param.engine_file = (char *)"/home/csh/nvocdr/onnx_models/ocrnet.fp16.engine";
-    // param.ocr_param.dict_file = (char *)"/home/csh/nvocdr/onnx_models/character_list.txt";
-
-
     nvocdr::sample::OCDRInferenceSample sample;
     if(!sample.parse_args(argc, argv)) {
         return 1;
     };
     sample.initialize();
 
-    std::string img_path = "/home/csh/nvocdr/c++_samples/test_img/scene_text.jpg";
-    std::string img_path2 = "/home/csh/nvocdr/c++_samples/test_img/doc.jpg";
-    std::vector<std::string> imgs{img_path2,};
-
-
-    for (size_t i = 0; i < 1; ++i) {
-        cv::Mat origin_image = cv::imread(imgs[i%1]);
+    cv::Mat origin_image = cv::imread(sample.mImagePath);
+    // cv::Mat image;
+    // cv::GaussianBlur(origin_image, image, cv::Size(0, 0), 3);
+    // cv::addWeighted(origin_image, 2, image, -1, 0, image);
+    // cv::resize(image, image, {200,200});
+    // for(int i = 0;i < 10;++i)
         const auto output = sample.infer(origin_image);
-        auto const viz = sample.visualize(origin_image, output);
-        cv::imwrite("viz.png", viz);
-    }
+    auto const viz = sample.visualize(origin_image, output);
+    cv::imwrite("viz.png", viz);
+    // cv::imwrite("slim_1.png", origin_image(cv::Rect(400, 0, 300, 3904)));
+    // cv::imwrite("slim_2.png", origin_image(cv::Rect(0, 300, 3904, 300)));
+    
+
 
     return 0;
 }

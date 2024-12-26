@@ -16,13 +16,17 @@ namespace nvocdr
 {
 constexpr char OCD_PREFIX[] = "OCD";
 constexpr char OCDNET_INPUT[] = "input";
-constexpr char OCDNET_OUTPUT[] = "pred";
+// constexpr char OCDNET_OUTPUT[] = "pred";
 
 class OCDNetEngine : public OCDTRTEngine
 {
     public:
         bool customInit() final;
         OCDNetEngine(const char name[], const nvOCDParam& param) : OCDTRTEngine(name, param) { };
+        float* getMaskOutputBuf();
+        size_t getOutputChannelIdx();
+        size_t getOutputChannels();
     private:
+        std::string mOutputName;
 };
 }
