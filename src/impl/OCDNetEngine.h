@@ -1,9 +1,9 @@
 #pragma once
 
 #include <string>
-#include <opencv4/opencv2/dnn.hpp>
-#include <opencv4/opencv2/imgproc.hpp>
-#include <opencv4/opencv2/highgui.hpp>
+// #include <opencv4/opencv2/dnn.hpp>
+// #include <opencv4/opencv2/imgproc.hpp>
+// #include <opencv4/opencv2/highgui.hpp>
 
 #include "MemManager.h"
 #include "TRTEngine.h"
@@ -16,6 +16,11 @@ namespace nvocdr
 {
 constexpr char OCD_PREFIX[] = "OCD";
 constexpr char OCDNET_INPUT[] = "input";
+
+static constexpr size_t QUAD = 4;
+
+using QUADANGLE = std::array<cv::Point2f, QUAD>;
+
 // constexpr char OCDNET_OUTPUT[] = "pred";
 
 class OCDNetEngine : public OCDTRTEngine
@@ -26,7 +31,23 @@ class OCDNetEngine : public OCDTRTEngine
         float* getMaskOutputBuf();
         size_t getOutputChannelIdx();
         size_t getOutputChannels();
+
+        void computeTextCandidates(const cv::Mat& mask,  
+               std::vector<QUADANGLE> * const quads,
+               std::vector<Text> * const texts,
+               size_t* num_text, const ProcessParam& process_param); 
     private:
+            void computeTextCandidatesNormal(const cv::Mat& mask,  
+               std::vector<QUADANGLE> * const quads,
+               std::vector<Text> * const texts,
+               size_t* num_text, const ProcessParam& process_param); 
+        void computeTextCandidatesMixNet(const cv::Mat& mask,  
+               std::vector<QUADANGLE> * const quads,
+               std::vector<Text> * const texts,
+               size_t* num_text, const ProcessParam& process_param);  
         std::string mOutputName;
+        // todo (shuohanc) put in attri temporarily, to save mem alloc/dealloc
+        std::vector<std::vector<cv::Point>> mTextCntrCandidates;
+
 };
 }

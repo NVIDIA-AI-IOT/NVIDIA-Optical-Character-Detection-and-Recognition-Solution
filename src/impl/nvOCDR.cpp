@@ -211,7 +211,7 @@ void nvOCDR::processTile(const nvOCDRInput &input)
     }
 
     if (mParam.process_param.debug_image) {
-        cv::imwrite("text_area.png", mOCDOutputMask);
+        cv::imwrite("text_area.png", ~mOCDOutputMask);
     }
     // select and filter the proper text candidates
     selectOCRCandidates();
@@ -225,7 +225,8 @@ void nvOCDR::processTile(const nvOCDRInput &input)
     if (mParam.process_param.all_direction) {
         directions = {0, 1, 2, 3};
     } else {
-        directions = {3};
+        // https://namkeenman.wordpress.com/2015/12/18/open-cv-determine-angle-of-rotatedrect-minarearect/
+        directions = {0};
     }
 
     for(size_t i = 0; i < num_ocr_runs; ++i) {
@@ -294,79 +295,9 @@ void nvOCDR::preprocessOCDTile(size_t start, size_t end)
 
 void nvOCDR::selectOCRCandidates()
 {
-    mTexts.clear();
-    mTextCntrCandidates.clear();
+    // mTextCntrCandidates.clear();
     mNumTexts = 0;
-
-    std::vector<std::vector<cv::Point>> raw_contours;
-
-    mOCDOutputMask.convertTo(mOCDOutputMask, CV_8U);
-    cv::findContours(mOCDOutputMask, raw_contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
-
-    // filter out too small
-    float min_pixel_area = mParam.process_param.min_pixel_area;
-    std::copy_if(raw_contours.begin(), raw_contours.end(), std::back_inserter(mTextCntrCandidates),
-                 [&min_pixel_area](auto const &contour)
-                 {
-                     return cv::contourArea(contour) >= min_pixel_area;
-                 });
-
-    // sort by score, desc
-    std::sort(mTextCntrCandidates.begin(), mTextCntrCandidates.end(), [](auto const &contour_a, auto const &contour_b)
-              {
-        float score_a = cv::contourArea(contour_a) / cv::boundingRect(contour_a).area();
-        float score_b = cv::contourArea(contour_b) / cv::boundingRect(contour_b).area();
-        return score_a > score_b; });
-
-    for (size_t i = 0; i < std::min(mTextCntrCandidates.size(), mParam.process_param.max_candidate); ++i)
-    {
-        auto const &contour = mTextCntrCandidates[i];
-        float polygon_score = cv::contourArea(contour) / cv::boundingRect(contour).area();
-        if (polygon_score <= mParam.process_param.polygon_threshold)
-        {
-            break;
-        }
-        // !!! (todo) find better way to find minimum quadrilateral, use minAreaRect temporarily
-        auto rotated = cv::minAreaRect(contour);
-
-        static float long_side_scale = 2;
-        static float short_side_scale = 1.1;
-
-        cv::Size new_size = rotated.size;
-
-        // enlarge the text area
-        if (new_size.width > 2 * new_size.height)
-        {
-            new_size.height *= long_side_scale;
-            new_size.width *= short_side_scale;
-        }
-        else if (new_size.height > 2 * new_size.width)
-        {
-            new_size.width *= long_side_scale;
-            new_size.height *= short_side_scale;
-        }
-        else
-        {
-            new_size.width *= 2;
-            new_size.height *= 2;
-        }
-
-        rotated = cv::RotatedRect(rotated.center, new_size, rotated.angle);
-
-        // prepare output
-        auto &vertices = mQuadPts[i];
-        Text &text = mTexts[i];
-
-        rotated.points(&vertices[0]);
-#pragma unroll
-        for (size_t j = 0; j < QUAD; ++j)
-        {
-            text.polygon[j * 2] = vertices[j].x;
-            text.polygon[j * 2 + 1] = vertices[j].y;
-        }
-        // text.angle = rotated.angle;
-        mNumTexts += 1;
-    }
+    mOCDNet->computeTextCandidates(mOCDOutputMask, &mQuadPts, &mTexts, &mNumTexts, mParam.process_param);
 }
 
 void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx)
@@ -375,33 +306,28 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx)
     const auto ocr_input_h = mOCRNet->getInputH();
     const auto ocr_input_w = mOCRNet->getInputW();
 
-    static std::array<cv::Point2f, QUAD> transform_dst{
+    static QUADANGLE transform_dst{
         cv::Point2f{0.F, static_cast<float>(ocr_input_h)},
         cv::Point2f{0.F, 0.F},
         cv::Point2f{static_cast<float>(ocr_input_w - 1), 0.F},
         cv::Point2f{static_cast<float>(ocr_input_w - 1), static_cast<float>(ocr_input_h - 1)}};
-    static std::array<cv::Point2f, QUAD> transform_src;
+    static QUADANGLE transform_src;
 
     float *buf = reinterpret_cast<float*>(mBufManager.getBuffer(mOCRNet->getBufName(OCRNET_INPUT), BUFFER_TYPE::HOST));
     for (size_t i = start; i < end; ++i)
     {   
         auto const &quad_pts = mQuadPts[i];
         cv::Rect rect = cv::boundingRect(quad_pts);
-
-        // https://namkeenman.wordpress.com/2015/12/18/open-cv-determine-angle-of-rotatedrect-minarearect/
-        bool direction = cv::norm(quad_pts[0] - quad_pts[1]) <= cv::norm(quad_pts[1] - quad_pts[2]);
 #pragma unroll
         for (size_t j = 0; j < QUAD; ++j)
         {
-            transform_src[j] = quad_pts[direction ? j : ((j + bl_pt_idx) % QUAD)] - cv::Point2f{
+            transform_src[j] = quad_pts[(j + bl_pt_idx) % QUAD] - cv::Point2f{
                 static_cast<float>(rect.tl().x), static_cast<float>(rect.tl().y)};
         }
 
         // compute perspective transform
         cv::Mat h = cv::findHomography(transform_src, transform_dst);
         cv::Mat text_roi(ocr_input_h, ocr_input_w, CV_32F, buf);
-
-        // LOG_IF(ERROR, mParam.process_param.debug_log)<< mInputGrayImage.size() << " " << rect;
 
         if ((rect & cv::Rect(0, 0, mInputGrayImage.cols, mInputGrayImage.rows)) == rect) { // rect not image
            auto tl = rect.tl();

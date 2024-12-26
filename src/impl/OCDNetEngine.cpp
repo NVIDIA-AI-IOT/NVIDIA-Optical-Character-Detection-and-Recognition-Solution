@@ -1,49 +1,239 @@
-#include "OCDNetEngine.h"
 #include <iostream>
-#include <opencv4/opencv2/dnn.hpp>
-#include <opencv4/opencv2/imgproc.hpp>
-#include <opencv4/opencv2/highgui.hpp>
+#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+
+#include "OCDNetEngine.h"
 namespace nvocdr
 {
+    inline void correctQuad(QUADANGLE& quadangle) {
+        bool direction = cv::norm(quadangle[0] - quadangle[1]) <= cv::norm(quadangle[1] - quadangle[2]);
+        static cv::Point2f tmp;
+        if (!direction) {
+            tmp = quadangle[3];
+            quadangle[3] = quadangle[2];
+            quadangle[2] = quadangle[1];
+            quadangle[1] = quadangle[0];
+            quadangle[0] = tmp;
+        }
+    }
 
     bool OCDNetEngine::customInit()
     {
         setupInput(OCDNET_INPUT, {}, true);
 
         // todo, unify output name, and remove this hack
-        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET)
+        {
             mOutputName = "fy_preds";
-        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+        }
+        else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL)
+        {
             mOutputName = "pred";
-        } 
+        }
         setupOutput(mOutputName, {}, true);
 
         return true;
     }
 
-    float* OCDNetEngine::getMaskOutputBuf() {
-        return reinterpret_cast<float *>(mBufManager.getBuffer(getBufName(mOutputName), 
-                       BUFFER_TYPE::HOST));
-                        
+    float *OCDNetEngine::getMaskOutputBuf()
+    {
+        return reinterpret_cast<float *>(mBufManager.getBuffer(getBufName(mOutputName),
+                                                               BUFFER_TYPE::HOST));
     }
 
-    size_t OCDNetEngine::getOutputChannelIdx() {
-        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+    size_t OCDNetEngine::getOutputChannelIdx()
+    {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET)
+        {
             return 1;
-        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+        }
+        else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL)
+        {
             return 0;
-        }  
+        }
+        return 0;
     }
-    size_t OCDNetEngine::getOutputChannels() {
-        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+    size_t OCDNetEngine::getOutputChannels()
+    {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET)
+        {
             return 4;
-        } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+        }
+        else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL)
+        {
             return 1;
-        }  
+        }
+        return 0;
+    }
+    void OCDNetEngine::computeTextCandidates(const cv::Mat &mask,
+                                             std::vector<QUADANGLE> *const quads,
+                                             std::vector<Text> *const texts,
+                                             size_t *num_text, const ProcessParam &process_param)
+    {
+        if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET)
+        {
+            computeTextCandidatesMixNet(mask, quads, texts, num_text, process_param);
+        }
+        else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL)
+        {
+            computeTextCandidatesNormal(mask, quads, texts, num_text, process_param);
+        }
+    }
+    void OCDNetEngine::computeTextCandidatesNormal(const cv::Mat &mask,
+                                                   std::vector<QUADANGLE> *const quads,
+                                                   std::vector<Text> *const texts,
+                                                   size_t *num_text, const ProcessParam &process_param)
+    {
+        std::vector<std::vector<cv::Point>> raw_contours;
+
+        cv::findContours(mask, raw_contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+        // filter out too small
+        std::copy_if(raw_contours.begin(), raw_contours.end(), std::back_inserter(mTextCntrCandidates),
+                     [&process_param](auto const &contour)
+                     {
+                         return cv::contourArea(contour) >= process_param.min_pixel_area;
+                     });
+
+        // sort by score, desc
+        std::sort(mTextCntrCandidates.begin(), mTextCntrCandidates.end(), [](auto const &contour_a, auto const &contour_b)
+                  {
+        float score_a = cv::contourArea(contour_a) / cv::boundingRect(contour_a).area();
+        float score_b = cv::contourArea(contour_b) / cv::boundingRect(contour_b).area();
+        return score_a > score_b; });
+
+        for (size_t i = 0; i < std::min(mTextCntrCandidates.size(), process_param.max_candidate); ++i)
+        {
+            auto const &contour = mTextCntrCandidates[i];
+            float polygon_score = cv::contourArea(contour) / cv::boundingRect(contour).area();
+            if (polygon_score <= process_param.polygon_threshold)
+            {
+                break;
+            }
+            // !!! (todo) find better way to find minimum quadrilateral, use minAreaRect temporarily
+            auto rotated = cv::minAreaRect(contour);
+
+            static float long_side_scale = 2;
+            static float short_side_scale = 1.1;
+
+            cv::Size new_size = rotated.size;
+
+            // enlarge the text area
+            if (new_size.width > 2 * new_size.height)
+            {
+                new_size.height *= long_side_scale;
+                new_size.width *= short_side_scale;
+            }
+            else if (new_size.height > 2 * new_size.width)
+            {
+                new_size.width *= long_side_scale;
+                new_size.height *= short_side_scale;
+            }
+            else
+            {
+                new_size.width *= 2;
+                new_size.height *= 2;
+            }
+
+            rotated = cv::RotatedRect(rotated.center, new_size, rotated.angle);
+            
+            // prepare output
+            auto &vertices = (*quads)[*num_text];
+            Text &text = (*texts)[*num_text];
+
+            rotated.points(&vertices[0]);
+            correctQuad(vertices);
+#pragma unroll
+            for (size_t j = 0; j < QUAD; ++j)
+            {
+                text.polygon[j * 2] = vertices[j].x;
+                text.polygon[j * 2 + 1] = vertices[j].y;
+            }
+            *num_text += 1;
+        }
     }
 
+    void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat &mask,
+                                                   std::vector<QUADANGLE> *const quads,
+                                                   std::vector<Text> *const texts,
+                                                   size_t *num_text, const ProcessParam &process_param)
+    {
+        std::vector<std::vector<cv::Point>> raw_contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(~mask, raw_contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
 
+        cv::Mat viz(mask.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+        cv::RNG rng(12345);
+        
+        std::vector<size_t> connected_compoment;
+        std::vector<std::vector<size_t>> group;
+        for(size_t i = 0; i < hierarchy.size(); ++i) {
+            auto const &h = hierarchy[i];
+            connected_compoment.push_back(i);
+            if (h[0] == -1 && h[2] == -1) {
+                group.push_back(connected_compoment);
+                connected_compoment.clear();
+                continue;
+            }
+            if (h[2] == -1 && h[3] == -1){
+                group.push_back(connected_compoment);
+                connected_compoment.clear();
+                continue;
+            }
+        }
+        LOG(INFO) << "group: " << group.size();
+
+        for(size_t i = 0; i< group.size(); ++i) {
+            cv::Scalar color(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+            if (group[i].size() != 2) {
+                continue;
+            }
+            auto outer = group[i][0];
+            auto inner = group[i][1];
+
+            if (hierarchy[outer][2] < 0) {
+                std::swap(outer, inner);
+            }
+
+            // for(size_t j = 0;  j< group[i].size(); ++j) {
+            //     cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[i][j]]}, -1, color);
+
+            //     if (group[i][j] == inner) continue;
+            //     cv::Vec4f line;
+            //     cv::fitLine(raw_contours[group[i][j]], line,  cv::DIST_L2,0, 0.01,0.01);
+
+            //     cv::Point p1(line[2] - 100 * line[0], line[3] - 100 * line[1]);
+
+            //     // cv::Point p1(line[2] , line[3]);
+            //     cv::Point p2(line[2] + 100 * line[0], line[3] + 100 * line[1]);
+
+            //     cv::line(viz, p1, p2, color);
+
+            // }
+            auto rotated = cv::minAreaRect(raw_contours[outer]);
+
+            // prepare output
+            auto &vertices = (*quads)[*num_text];
+            Text &text = (*texts)[*num_text];
+
+            rotated.points(&vertices[0]);
+            correctQuad(vertices);
+
+#pragma unroll
+            for (size_t j = 0; j < QUAD; ++j)
+            {
+                text.polygon[j * 2] = vertices[j].x;
+                text.polygon[j * 2 + 1] = vertices[j].y;
+            }
+            *num_text += 1;
+
+            if (*num_text == process_param.max_candidate){
+                break;
+            }
+
+        }
+        cv::imwrite("hctnr.png", viz);
+    }
 
     // float OCDNetEngine::contourScore(const Mat& binary, const vector<Point>& contour)
     // {

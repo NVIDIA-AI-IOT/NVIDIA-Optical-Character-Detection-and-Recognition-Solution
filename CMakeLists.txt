@@ -1,9 +1,9 @@
 project(NV_OCDR LANGUAGES CUDA CXX)
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.20)
 
 find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
-find_package(glog REQUIRED)
+find_package(glog 0.4.0 REQUIRED)
 
 
 if(OpenCV_FOUND)

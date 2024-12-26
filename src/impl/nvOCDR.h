@@ -22,7 +22,6 @@ static constexpr float IMG_MEAN_R = 122.67891434;
 static constexpr float IMG_SCALE_BRG = 0.00392156;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;
-static constexpr size_t QUAD = 4;
 
 
 // static constexpr size_t TRIA = 3;
@@ -103,9 +102,9 @@ class nvOCDR
         std::pair<cv::Size, cv::Size> mResizeInfo;
         std::vector<cv::Rect> mTiles;
         
-        std::vector<std::vector<cv::Point>> mTextCntrCandidates;
+        // std::vector<std::vector<cv::Point>> mTextCntrCandidates;
 
-        std::vector<std::array<cv::Point2f, QUAD>> mQuadPts; 
+        std::vector<QUADANGLE> mQuadPts; 
         
         std::vector<Text> mTexts;
         size_t mNumTexts;
