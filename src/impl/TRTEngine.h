@@ -7,12 +7,14 @@
 #include <unordered_map>
 #include <cuda.h>
 #include <cuda_runtime.h>
+
 #include "NvInfer.h"
 #include "nvocdr.h"
 #include "MemManager.h"
 
 namespace nvocdr
 {
+
 using namespace nvinfer1;
 
 size_t volume(const Dims& dim);
@@ -52,7 +54,7 @@ class TRTEngine
         // Do TRT-based inference with processed input and get output
         bool infer(const cudaStream_t& stream = 0);
         bool syncMemory(bool input, bool host2device, const cudaStream_t& stream);
-        
+
         inline std::string getBufName(const std::string &name) {return mName + "_" + name; }
         inline size_t getInputH () { return mInputH; };
         inline size_t getInputW () { return mInputW; };

@@ -1,6 +1,7 @@
 #include <iostream>
-#include "MemManager.h"
 #include <glog/logging.h>
+
+#include "MemManager.h"
 
 namespace nvocdr
 {

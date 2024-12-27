@@ -1,13 +1,9 @@
 #pragma once
 
 #include <string>
-// #include <opencv4/opencv2/dnn.hpp>
-// #include <opencv4/opencv2/imgproc.hpp>
-// #include <opencv4/opencv2/highgui.hpp>
 
 #include "MemManager.h"
 #include "TRTEngine.h"
-#include "kernel.h"
 #include "nvocdr.h"
 
 // #define OCD_DEBUG

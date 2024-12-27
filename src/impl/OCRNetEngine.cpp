@@ -2,7 +2,6 @@
 #include <fstream>
 #include <algorithm>
 #include "OCRNetEngine.h"
-#include "kernel.h"
 #include "MemManager.h"
 #include <glog/logging.h>
 

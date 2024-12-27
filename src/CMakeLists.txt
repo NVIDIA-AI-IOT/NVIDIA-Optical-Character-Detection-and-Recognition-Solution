@@ -8,7 +8,7 @@ list(APPEND PLUGINS "nvinfer_plugin")
 foreach(libName ${PLUGINS})
     find_library(${libName}_lib NAMES ${libName} "/usr" PATH_SUFFIXES lib)
     if(${libName}_lib)
-        message("TensorRT found: " ${libName})
+        message("-- TensorRT lib found: " ${libName})
     endif()
     list(APPEND TRT_PLUGIN_LIBS "${${libName}_lib}")
 endforeach()
@@ -26,7 +26,7 @@ target_link_libraries(nvocdr PRIVATE ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${TRT_PLUG
 # todo(shuohanc) add more supported arch
 set_target_properties(nvocdr PROPERTIES CUDA_ARCHITECTURES "50;72;86")
 
-target_compile_features(nvocdr PUBLIC cxx_std_11)
+# target_compile_features(nvocdr PUBLIC cxx_std_11)
 target_compile_features(nvocdr PUBLIC cuda_std_11)
 
 # set_target_properties(nvocdr PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
