@@ -9,7 +9,7 @@
 #include <vector>
 
 namespace nvocdr {
-
+// NOLINTBEGIN
 #ifndef checkKernelErrors
 #define checkKernelErrors(expr)                                                         \
   do {                                                                                  \
@@ -101,8 +101,8 @@ class GenericBuffer {
   //!
   // GenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
   GenericBuffer() : mSize(0), mCapacity(0), mItemSize(1), mBuffer(nullptr) {}
-  GenericBuffer(const size_t item_size)
-      : mSize(0), mCapacity(0), mItemSize(item_size), mBuffer(nullptr) {}
+  // GenericBuffer(const size_t item_size)
+  //     : mSize(0), mCapacity(0), mItemSize(item_size), mBuffer(nullptr) {}
 
   //!
   //! \brief Construct a buffer with the specified allocation size in bytes.
@@ -204,6 +204,7 @@ class HostFree {
  public:
   void operator()(void* ptr) const { free(ptr); }
 };
+// NOLINTEND
 
 using DeviceBuffer = GenericBuffer<DeviceAllocator, DeviceFree>;
 using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
@@ -219,7 +220,8 @@ using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 // };
 
 // todo(shuohanc) release singleton
-enum BUFFER_TYPE { DEVICE, HOST };
+enum BUFFER_TYPE : uint8_t 
+{ DEVICE, HOST };
 class BufferManager {
  public:
   void initBuffer(const std::string& name, const size_t& size, bool host_buf = true);
@@ -237,8 +239,8 @@ class BufferManager {
   BufferManager& operator=(const BufferManager&) = delete;
 
  private:
-  BufferManager() {}
-  ~BufferManager() {}
+  BufferManager() = default;
+  ~BufferManager() = default;
   std::map<std::string, DeviceBuffer> mDeviceBuffer;
   std::map<std::string, HostBuffer> mHostBuffer;
   std::map<std::string, size_t> mNumBytes;

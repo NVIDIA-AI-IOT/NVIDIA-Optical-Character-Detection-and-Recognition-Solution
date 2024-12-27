@@ -11,7 +11,10 @@ Checks: "*,
         -readability-else-after-return,
         -cppcoreguidelines-non-private-member-variables-in-classes,
         -misc-non-private-member-variables-in-classes,
+        -misc-include-cleaner,
 "
 WarningsAsErrors: ''
-HeaderFilterRegex: ''
+HeaderFileExtensions:         ['', 'h','hh','hpp','hxx']
+ImplementationFileExtensions: ['c','cc','cpp','cxx']
+HeaderFilterRegex:   'src/*.h'
 FormatStyle:     none

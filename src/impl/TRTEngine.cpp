@@ -14,7 +14,7 @@ using namespace nvinfer1;
 namespace nvocdr {
 inline size_t volume(const nvinfer1::Dims& dim) {
   size_t data_size = 1;
-  for (int i = 0; i < dim.nbDims; i++) {
+  for (size_t i = 0; i < dim.nbDims; i++) {
     data_size *= dim.d[i];
   }
   return data_size;
@@ -23,8 +23,8 @@ inline size_t volume(const nvinfer1::Dims& dim) {
 class Logger : public ILogger {
   void log(Severity severity, const char* msg) noexcept override {
     // suppress info-level messages
-    if (severity <= Severity::kERROR)
-      std::cout << msg << std::endl;
+    if (severity <= Severity::kERROR){
+      std::cout << msg << '\n';}
   }
 } logger;
 
@@ -44,25 +44,26 @@ bool TRTEngine<Param>::postInit() {
       setupOutput(name, {}, false);  // remove in model export
     }
   }
+  return true;
 }
 
 template <typename Param>
 bool TRTEngine<Param>::initEngine() {
 
-  initLibNvInferPlugins(&logger, "");
+  initLibNvInferPlugins(reinterpret_cast<void*>(&logger), "");
   mRuntime = std::move(TRTUniquePtr<IRuntime>(createInferRuntime(logger)));
   //load binary engine:
   LOG(INFO) << "load engine from:" << mParam.model_file;
   std::ifstream engineFile(mParam.model_file, std::ios::binary);
-  if (engineFile.good() == false) {
+  if (!engineFile.good()) {
     LOG(ERROR) << "Error reading serialized TensorRT engine: " << mParam.model_file;
   }
   engineFile.seekg(0, std::ifstream::end);
-  int64_t fsize = engineFile.tellg();
+  const int64_t fsize = engineFile.tellg();
   engineFile.seekg(0, std::ifstream::beg);
 
-  std::vector<uint8_t> engineBlob(fsize);
-  engineFile.read(reinterpret_cast<char*>(engineBlob.data()), fsize);
+  std::vector<char> engineBlob(fsize);
+  engineFile.read(engineBlob.data(), fsize);
   if (!engineFile.good()) {
     LOG(INFO) << "Error reading serialized TensorRT engine: " << mParam.model_file;
     throw std::runtime_error("Error reading serialized TensorRT engine");
@@ -73,8 +74,8 @@ bool TRTEngine<Param>::initEngine() {
   mContext = std::move(TRTUniquePtr<IExecutionContext>(mEngine->createExecutionContext()));
 
   size_t engine_max_batch_size = 0;
-  for (size_t i = 0U; i < mEngine->getNbIOTensors(); ++i) {
-    std::string tensor_name(mEngine->getIOTensorName(i));
+  for (int i = 0; i < mEngine->getNbIOTensors(); ++i) {
+    const std::string tensor_name(mEngine->getIOTensorName(i));
 
     if (mEngine->getTensorIOMode(tensor_name.c_str()) == TensorIOMode::kINPUT) {
       mInputNames.push_back(tensor_name);
@@ -94,7 +95,7 @@ bool TRTEngine<Param>::initEngine() {
 template <typename Param>
 void TRTEngine<Param>::setupInput(const std::string& input_name, const Dims& dims, bool host_buf) {
   // final shape = opt shape
-  std::string name = input_name == "" ? mInputNames[0] : input_name;
+  const std::string name = input_name.empty() ? mInputNames[0] : input_name;
   LOG(INFO) << "-------- setup input for name: " << name << "--------";
 
   auto final_shape = mEngine->getProfileShape(name.c_str(), 0, OptProfileSelector::kOPT);
@@ -143,7 +144,7 @@ void TRTEngine<Param>::setupOutput(const std::string& output_name, const Dims& d
 
 template <typename Param>
 bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream_t& stream) {
-  std::vector<std::string>* names;
+  std::vector<std::string>* names = nullptr;
   if (input) {
     names = &mInputNames;
   } else {
@@ -161,7 +162,7 @@ bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream
 }
 template <typename Param>
 nvinfer1::Dims TRTEngine<Param>::getOutputDims(const std::string& name) {
-  if (mOutputDims.count(name)) {
+  if (mOutputDims.count(name) > 0) {
     return mOutputDims[name];
   } else {
     throw std::runtime_error("not output name: " + name);

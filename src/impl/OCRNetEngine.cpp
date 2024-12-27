@@ -23,7 +23,7 @@ bool OCRNetEngine::customInit() {
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
     mDict.emplace_back("[E]");
   } else {
-    LOG(INFO) << "[ERROR] Unsupported decode mode" << std::endl;
+    LOG(INFO) << "[ERROR] Unsupported decode mode";
   }
 
   loadDict();
@@ -56,12 +56,12 @@ void OCRNetEngine::loadDict() {
     }
 
     for (size_t i = 0; i < 26; i++) {
-      mDict.emplace_back(std::string(1, i + 'a'));
+      mDict.emplace_back(1, i + 'a');
     }
   } else {
     std::ifstream dict_file(mParam.dict);
 
-    if (dict_file.good() == false) {
+    if (!dict_file.good()) {
       LOG(INFO) << "[ERROR] Error reading OCRNet dict file " << mParam.dict << std::endl;
     }
     while (!dict_file.eof()) {
@@ -96,8 +96,9 @@ void OCRNetEngine::decodeCTC(Text* const text, size_t idx) {
   std::string ret;
   float score = 1.F;
   for (size_t i = 0, j = 0; i < mOutputCharLength && j < mOutputCharLength; i++) {
-    while (j < mOutputCharLength && (cls[j] == 0 || cls[j] == cls[i]))
+    while (j < mOutputCharLength && (cls[j] == 0 || cls[j] == cls[i])){
       j++;
+    }
     ret += mDict[cls[i]];
     score *= prob[i];
     i = j - 1;

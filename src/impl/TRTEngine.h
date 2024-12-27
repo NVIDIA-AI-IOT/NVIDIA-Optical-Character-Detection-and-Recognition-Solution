@@ -39,6 +39,7 @@ using TRTUniquePtr = std::unique_ptr<T, InferDeleter>;
 template <typename Param>
 class TRTEngine {
  public:
+  
   TRTEngine(const char name[], const Param& param) : mName(name), mParam(param) {};
 
   bool init();
@@ -58,7 +59,9 @@ class TRTEngine {
 
  protected:
   void setupInput(const std::string& input_name, const Dims& dims, bool host_buf = false);
-  void setupOutput(const std::string& ouput_name, const Dims& dims, bool host_buf = false);
+  void setupOutput(const std::string& output_name, const Dims& dims, bool host_buf = false);
+  ~TRTEngine() = default;
+
 
   Param mParam;
   std::string mName;

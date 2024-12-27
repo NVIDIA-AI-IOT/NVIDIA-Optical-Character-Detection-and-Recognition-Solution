@@ -1,17 +1,22 @@
 #include <glog/logging.h>
 #include <iostream>
+#include <string>
+#include <cstddef>
+
+#include <cuda_runtime_api.h>
+// #include <cuda_runtime.h>
 
 #include "MemManager.h"
 
 namespace nvocdr {
 void BufferManager::initBuffer(const std::string& name, const size_t& size, bool host_buf) {
   // todo(shuohan) check if double init
-  if (!mDeviceBuffer.count(name)) {
+  if (mDeviceBuffer.count(name) == 0) {
     mDeviceBuffer[name].resize(size);
     LOG(INFO) << "init device buffer for '" << name << "' with bytes: " << size << "\n";
     mNumBytes[name] = size;
   }
-  if (host_buf && !mHostBuffer.count(name)) {
+  if (host_buf && mHostBuffer.count(name) == 0) {
     mHostBuffer[name].resize(size);
     LOG(INFO) << "init host buffer for '" << name << "' with bytes: " << size << "\n";
   }
@@ -19,13 +24,13 @@ void BufferManager::initBuffer(const std::string& name, const size_t& size, bool
 
 void* BufferManager::getBuffer(const std::string& name, BUFFER_TYPE buf_type) {
   if (buf_type == BUFFER_TYPE::HOST) {
-    if (mHostBuffer.count(name)) {
+    if (mHostBuffer.count(name) > 0) {
       return mHostBuffer.at(name).data();
     } else {
       throw std::runtime_error("can not get host buf " + name);
     }
   } else {
-    if (mDeviceBuffer.count(name)) {
+    if (mDeviceBuffer.count(name) > 0) {
       return mDeviceBuffer.at(name).data();
     } else {
       throw std::runtime_error("can not get device buf " + name);
@@ -33,14 +38,14 @@ void* BufferManager::getBuffer(const std::string& name, BUFFER_TYPE buf_type) {
   }
 }
 void BufferManager::copyDeviceToHost(const std::string& name, const cudaStream_t& stream) {
-  if (mHostBuffer.count(name) && mDeviceBuffer.count(name)) {
+  if (mHostBuffer.count(name) > 0 && mDeviceBuffer.count(name) > 0) {
     checkCudaErrors(cudaMemcpyAsync(getBuffer(name, BUFFER_TYPE::HOST),
                                     getBuffer(name, BUFFER_TYPE::DEVICE), mNumBytes[name],
                                     cudaMemcpyDeviceToHost, stream));
   }
 }
 void BufferManager::copyHostToDevice(const std::string& name, const cudaStream_t& stream) {
-  if (mHostBuffer.count(name) && mDeviceBuffer.count(name)) {
+  if (mHostBuffer.count(name) > 0 && mDeviceBuffer.count(name) > 0) {
     checkCudaErrors(cudaMemcpyAsync(getBuffer(name, BUFFER_TYPE::DEVICE),
                                     getBuffer(name, BUFFER_TYPE::HOST), mNumBytes[name],
                                     cudaMemcpyHostToDevice, stream));
@@ -48,7 +53,7 @@ void BufferManager::copyHostToDevice(const std::string& name, const cudaStream_t
 }
 
 size_t BufferManager::getBufferSize(const std::string& name) {
-  if (mNumBytes.count(name)) {
+  if (mNumBytes.count(name) > 0) {
     return mNumBytes[name];
   }
   return 0;
