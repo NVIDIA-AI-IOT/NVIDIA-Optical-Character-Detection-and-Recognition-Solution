@@ -15,7 +15,7 @@ endforeach()
 
 
 # impl/nvOCDR.cpp 
-file(GLOB NVOCDR_SRC nvocdr.cpp impl/MemManager.cpp impl/TRTEngine.cpp impl/OCRNetEngine.cpp impl/OCDNetEngine.cpp impl/nvOCDR.cpp )
+file(GLOB NVOCDR_SRC nvocdr.cpp impl/*.cpp)
 # file(GLOB NVOCDR_SRC impl/*.cpp impl/*.cu )
 
 add_library(nvocdr SHARED ${NVOCDR_SRC})

@@ -1,38 +1,35 @@
 #pragma once
+#include <cublas_v2.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <cublas_v2.h>
 
-#include <memory>
-#include <vector>
-#include <unordered_map>
 #include <map>
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace nvocdr {
 
-    #ifndef checkKernelErrors
-#    define checkKernelErrors(expr)                                                               \
-        do                                                                                        \
-        {                                                                                         \
-            expr;                                                                                 \
-                                                                                                  \
-            cudaError_t __err = cudaGetLastError();                                               \
-            if (__err != cudaSuccess)                                                             \
-            {                                                                                     \
-                printf("Line %d: '%s' failed: %s\n", __LINE__, #expr, cudaGetErrorString(__err)); \
-                abort();                                                                          \
-            }                                                                                     \
-        }                                                                                         \
-        while (0)
+#ifndef checkKernelErrors
+#define checkKernelErrors(expr)                                                         \
+  do {                                                                                  \
+    expr;                                                                               \
+                                                                                        \
+    cudaError_t __err = cudaGetLastError();                                             \
+    if (__err != cudaSuccess) {                                                         \
+      printf("Line %d: '%s' failed: %s\n", __LINE__, #expr, cudaGetErrorString(__err)); \
+      abort();                                                                          \
+    }                                                                                   \
+  } while (0)
 #endif
 
 // CUDA Runtime error messages
-static const char *_cudaGetErrorEnum(cudaError_t error) {
+static const char* _cudaGetErrorEnum(cudaError_t error) {
   return cudaGetErrorName(error);
 }
 
 // cuBLAS API errors
-static const char *_cudaGetErrorEnum(cublasStatus_t error) {
+static const char* _cudaGetErrorEnum(cublasStatus_t error) {
   switch (error) {
     case CUBLAS_STATUS_SUCCESS:
       return "CUBLAS_STATUS_SUCCESS";
@@ -69,8 +66,7 @@ static const char *_cudaGetErrorEnum(cublasStatus_t error) {
 }
 
 template <typename T>
-void check(T result, char const *const func, const char *const file,
-           int const line) {
+void check(T result, char const* const func, const char* const file, int const line) {
   if (result) {
     fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\" \n", file, line,
             static_cast<unsigned int>(result), _cudaGetErrorEnum(result), func);
@@ -98,169 +94,115 @@ void check(T result, char const *const func, const char *const file,
 //!          ptr is the allocated buffer address. It must work with nullptr input.
 //!
 template <typename AllocFunc, typename FreeFunc>
-class GenericBuffer
-{
-public:
-    //!
-    //! \brief Construct an empty buffer.
-    //!
-    // GenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
-    GenericBuffer()
-        : mSize(0)
-        , mCapacity(0)
-        , mItemSize(1)
-        , mBuffer(nullptr)
-    {
-    }
-    GenericBuffer(const size_t item_size)
-        : mSize(0)
-        , mCapacity(0)
-        , mItemSize(item_size)
-        , mBuffer(nullptr)
-    {
-    }
+class GenericBuffer {
+ public:
+  //!
+  //! \brief Construct an empty buffer.
+  //!
+  // GenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
+  GenericBuffer() : mSize(0), mCapacity(0), mItemSize(1), mBuffer(nullptr) {}
+  GenericBuffer(const size_t item_size)
+      : mSize(0), mCapacity(0), mItemSize(item_size), mBuffer(nullptr) {}
 
-    //!
-    //! \brief Construct a buffer with the specified allocation size in bytes.
-    //!
-    // GenericBuffer(size_t size, nvinfer1::DataType type)
-    GenericBuffer(size_t size, size_t item_size)
-        : mSize(size)
-        , mItemSize(item_size)
-        , mCapacity(size)
-    {
-        if (!allocFn(&mBuffer, this->nbBytes()))
-        {
-            throw std::bad_alloc();
-        }
+  //!
+  //! \brief Construct a buffer with the specified allocation size in bytes.
+  //!
+  // GenericBuffer(size_t size, nvinfer1::DataType type)
+  GenericBuffer(size_t size, size_t item_size)
+      : mSize(size), mItemSize(item_size), mCapacity(size) {
+    if (!allocFn(&mBuffer, this->nbBytes())) {
+      throw std::bad_alloc();
     }
+  }
 
-    GenericBuffer(GenericBuffer&& buf)
-        : mSize(buf.mSize)
-        , mCapacity(buf.mCapacity)
-        , mItemSize(buf.mItemSize)
-        , mBuffer(buf.mBuffer)
-    {
-        buf.mSize = 0;
-        buf.mCapacity = 0;
-        buf.mItemSize = 0;
-        buf.mBuffer = nullptr;
+  GenericBuffer(GenericBuffer&& buf)
+      : mSize(buf.mSize), mCapacity(buf.mCapacity), mItemSize(buf.mItemSize), mBuffer(buf.mBuffer) {
+    buf.mSize = 0;
+    buf.mCapacity = 0;
+    buf.mItemSize = 0;
+    buf.mBuffer = nullptr;
+  }
+
+  GenericBuffer& operator=(GenericBuffer&& buf) {
+    if (this != &buf) {
+      freeFn(mBuffer);
+      mSize = buf.mSize;
+      mCapacity = buf.mCapacity;
+      mItemSize = buf.mItemSize;
+      mBuffer = buf.mBuffer;
+      // Reset buf.
+      buf.mSize = 0;
+      buf.mCapacity = 0;
+      buf.mBuffer = nullptr;
     }
+    return *this;
+  }
 
-    GenericBuffer& operator=(GenericBuffer&& buf)
-    {
-        if (this != &buf)
-        {
-            freeFn(mBuffer);
-            mSize = buf.mSize;
-            mCapacity = buf.mCapacity;
-            mItemSize= buf.mItemSize;
-            mBuffer = buf.mBuffer;
-            // Reset buf.
-            buf.mSize = 0;
-            buf.mCapacity = 0;
-            buf.mBuffer = nullptr;
-        }
-        return *this;
+  //!
+  //! \brief Returns pointer to underlying array.
+  //!
+  void* data() { return mBuffer; }
+
+  //!
+  //! \brief Returns pointer to underlying array.
+  //!
+  const void* data() const { return mBuffer; }
+
+  //!
+  //! \brief Returns the size (in number of elements) of the buffer.
+  //!
+  size_t size() const { return mSize; }
+
+  //!
+  //! \brief Returns the size (in bytes) of the buffer.
+  //!
+  size_t nbBytes() const { return this->size() * mItemSize; }
+
+  //!
+  //! \brief Resizes the buffer. This is a no-op if the new size is smaller than or equal to the current capacity.
+  //!
+  void resize(size_t newSize) {
+    mSize = newSize;
+    if (mCapacity < newSize) {
+      freeFn(mBuffer);
+      if (!allocFn(&mBuffer, this->nbBytes())) {
+        throw std::bad_alloc{};
+      }
+      mCapacity = newSize;
     }
+  }
 
-    //!
-    //! \brief Returns pointer to underlying array.
-    //!
-    void* data()
-    {
-        return mBuffer;
-    }
+  ~GenericBuffer() { freeFn(mBuffer); }
 
-    //!
-    //! \brief Returns pointer to underlying array.
-    //!
-    const void* data() const
-    {
-        return mBuffer;
-    }
-
-    //!
-    //! \brief Returns the size (in number of elements) of the buffer.
-    //!
-    size_t size() const
-    {
-        return mSize;
-    }
-
-    //!
-    //! \brief Returns the size (in bytes) of the buffer.
-    //!
-    size_t nbBytes() const
-    {
-        return this->size() * mItemSize;
-    }
-
-    //!
-    //! \brief Resizes the buffer. This is a no-op if the new size is smaller than or equal to the current capacity.
-    //!
-    void resize(size_t newSize)
-    {
-        mSize = newSize;
-        if (mCapacity < newSize)
-        {
-            freeFn(mBuffer);
-            if (!allocFn(&mBuffer, this->nbBytes()))
-            {
-                throw std::bad_alloc{};
-            }
-            mCapacity = newSize;
-        }
-    }
-
-    ~GenericBuffer()
-    {
-        freeFn(mBuffer);
-    }
-
-private:
-    size_t mSize{0}, mCapacity{0};
-    size_t mItemSize;
-    void* mBuffer;
-    AllocFunc allocFn;
-    FreeFunc freeFn;
+ private:
+  size_t mSize{0}, mCapacity{0};
+  size_t mItemSize;
+  void* mBuffer;
+  AllocFunc allocFn;
+  FreeFunc freeFn;
 };
 
-class DeviceAllocator
-{
-public:
-    bool operator()(void** ptr, size_t size) const
-    {
-        return cudaMalloc(ptr, size) == cudaSuccess;
-    }
+class DeviceAllocator {
+ public:
+  bool operator()(void** ptr, size_t size) const { return cudaMalloc(ptr, size) == cudaSuccess; }
 };
 
-class DeviceFree
-{
-public:
-    void operator()(void* ptr) const
-    {
-        cudaFree(ptr);
-    }
+class DeviceFree {
+ public:
+  void operator()(void* ptr) const { cudaFree(ptr); }
 };
 
-class HostAllocator
-{
-public:
-    bool operator()(void** ptr, size_t size) const
-    {
-        *ptr = malloc(size);
-        return *ptr != nullptr;
-    }
+class HostAllocator {
+ public:
+  bool operator()(void** ptr, size_t size) const {
+    *ptr = malloc(size);
+    return *ptr != nullptr;
+  }
 };
 
-class HostFree
-{
-public:
-    void operator()(void* ptr) const
-    {
-        free(ptr);
-    }
+class HostFree {
+ public:
+  void operator()(void* ptr) const { free(ptr); }
 };
 
 using DeviceBuffer = GenericBuffer<DeviceAllocator, DeviceFree>;
@@ -276,36 +218,30 @@ using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 //     HostBuffer hostBuffer;
 // };
 
-//Helper class that control all the mem used in the lib
-//Version 0 
-enum BUFFER_TYPE {
-    DEVICE,
-    HOST
-};
-class BufferManager
-{
-    public:
-        void initBuffer(const std::string& name, const size_t& size, bool host_buf = true);
-        void* getBuffer(const std::string & name, BUFFER_TYPE buf_type);
-        bool checkBufferExist(const std::string & name) {return mDeviceBuffer.count(name) > 0;};
-        size_t getBufferSize(const std::string& name);
-        void copyDeviceToHost(const std::string &name, const cudaStream_t& stream);
-        void copyHostToDevice(const std::string &name, const cudaStream_t& stream);
+// todo(shuohanc) release singleton
+enum BUFFER_TYPE { DEVICE, HOST };
+class BufferManager {
+ public:
+  void initBuffer(const std::string& name, const size_t& size, bool host_buf = true);
+  void* getBuffer(const std::string& name, BUFFER_TYPE buf_type);
+  bool checkBufferExist(const std::string& name) { return mDeviceBuffer.count(name) > 0; };
+  size_t getBufferSize(const std::string& name);
+  void copyDeviceToHost(const std::string& name, const cudaStream_t& stream);
+  void copyHostToDevice(const std::string& name, const cudaStream_t& stream);
 
-        static BufferManager& Instance() {
-          static BufferManager singleton;
-          return singleton;
-        }
-        BufferManager(const BufferManager &) = delete;
-        BufferManager & operator = (const BufferManager &) = delete;
+  static BufferManager& Instance() {
+    static BufferManager singleton;
+    return singleton;
+  }
+  BufferManager(const BufferManager&) = delete;
+  BufferManager& operator=(const BufferManager&) = delete;
 
-    private:
-      BufferManager() {}
-      ~BufferManager() {}
-      std::map<std::string, DeviceBuffer> mDeviceBuffer;
-      std::map<std::string, HostBuffer> mHostBuffer;
-      std::map<std::string, size_t> mNumBytes;
+ private:
+  BufferManager() {}
+  ~BufferManager() {}
+  std::map<std::string, DeviceBuffer> mDeviceBuffer;
+  std::map<std::string, HostBuffer> mHostBuffer;
+  std::map<std::string, size_t> mNumBytes;
 };
 
-}
-
+}  // namespace nvocdr
