@@ -91,6 +91,8 @@ bool nvOCDR_process(void* const nvocdr_handler, const nvOCDRInput& input,
                     nvOCDROutput* const output);
 void nvOCDR_release(void* const nvocdr_handler);
 
+void nvOCDR_print_stat(void* const nvocdr_handler);
+
 #ifdef __cplusplus
 }
 #endif

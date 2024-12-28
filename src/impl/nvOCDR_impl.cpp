@@ -102,27 +102,21 @@ void nvOCDR::handleStrategy(const nvOCDRInput& input) {
 }
 
 void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
-  const auto start_t = std::chrono::high_resolution_clock::now();
+  mE2ETimer.Start();
 
   // restore image from buffer to cv::Mat, handle data order/channel
   restoreImage(input);
-
   // handle different strategy ,mResizeInfo will be set
   handleStrategy(input);
-
   // preprocess the data, like normalization
   preprocessInputImage();
-
   // all strategy will map to uniformed tile processing,
   processTile(input);
-
   // set the output
   setOutput(output);
 
   // wall time of processing
-  auto duration = std::chrono::high_resolution_clock::now() - start_t;
-  LOG(INFO) << "process takes "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
+  mE2ETimer.Stop();
 }
 
 void nvOCDR::restoreImage(const nvOCDRInput& input) {
@@ -181,12 +175,14 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
   LOG(INFO) << "tiles: " << num_tiles << ", run ocd " << num_ocd_runs << " times with batch size "
             << num_ocd_bs;
 
+  mOCDTimer.Start();
   // 1. ocd process
   for (size_t i = 0; i < num_ocd_runs; i++) {
     size_t start_idx = i * num_ocd_bs;
     size_t end_idx = std::min((i + 1) * num_ocd_bs, num_tiles);
-
+    auto t = std::chrono::high_resolution_clock::now();
     preprocessOCDTile(start_idx, end_idx);  // batch inference
+    // ocd_dur += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - t);
 
     mOCDNet->syncMemory(true, true, mStream);
     mOCDNet->infer();
@@ -201,12 +197,17 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
     // restore mask to origin size
     cv::resize(mOCDOutputMask, mOCDOutputMask, mResizeInfo.first);
   }
+  // mOCDTimer.Stop();
+  LOG(INFO) << "ocd process time: " << mOCDTimer;
 
   if (mParam.process_param.debug_image) {
     cv::imwrite("text_area.png", ~mOCDOutputMask);
   }
+
+  mSelectProcessTimer.Start();
   // select and filter the proper text candidates
   selectOCRCandidates();
+  LOG(INFO) << "select text process time: " << mSelectProcessTimer;
 
   // 2. ocr process
   size_t num_ocr_bs = mOCRNet->getBatchSize();
@@ -222,6 +223,8 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
     directions = {0};
   }
 
+  mOCRTimer.Start();
+
   for (size_t i = 0; i < num_ocr_runs; ++i) {
     size_t start_idx = i * num_ocr_bs;
     size_t end_idx = std::min((i + 1) * num_ocr_bs, mNumTexts);
@@ -234,6 +237,8 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
       postprocessOCR(start_idx, end_idx);
     }
   }
+
+  LOG(INFO) << "ocr process takes " << mOCRTimer;
 }
 
 void nvOCDR::postprocessOCDTile(size_t start, size_t end) {
@@ -284,7 +289,6 @@ void nvOCDR::preprocessOCDTile(size_t start, size_t end) {
 }
 
 void nvOCDR::selectOCRCandidates() {
-  // mTextCntrCandidates.clear();
   mNumTexts = 0;
   mOCDNet->computeTextCandidates(mOCDOutputMask, &mQuadPts, &mTexts, &mNumTexts,
                                  mParam.process_param);
@@ -330,7 +334,10 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
       LOG(WARNING) << "ignore text out side ";
     }
 
+    const auto start_t = std::chrono::high_resolution_clock::now();
+
     cv::warpPerspective(mInputGrayImage(rect), text_roi, h, cv::Size(ocr_input_w, ocr_input_h));
+    const auto end_t = std::chrono::high_resolution_clock::now();
 
     buf += ocr_input_h * ocr_input_w;
 
@@ -378,6 +385,22 @@ nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
     mOCRNet->infer(mStream);
     mOCDNet->infer(mStream);
   }
+}
+
+void nvOCDR::printTimeStat() {
+  LOG(INFO) << "---------- time statistics ----------";
+  LOG(INFO) << "history size: " << TIME_HISTORY_SIZE;
+
+  auto ocd_mean = mOCDTimer.getMean();
+  auto select_mean = mSelectProcessTimer.getMean();
+  auto ocr_mean = mOCRTimer.getMean();
+  auto e2e_mean = mE2ETimer.getMean();
+  LOG(INFO) << "statistic shows in 'mean(ms) / percentage(%)' ";
+
+  LOG(INFO) << "ocd: " << ocd_mean << "ms / " << static_cast<int>(ocd_mean / e2e_mean * 100) << "%"; 
+  LOG(INFO) << "ocr: " << ocr_mean << "ms / " << static_cast<int>(ocr_mean / e2e_mean * 100) << "%"; 
+
+  LOG(INFO) << "e2e_mean: " << e2e_mean <<"ms"; 
 }
 
 }  // namespace nvocdr

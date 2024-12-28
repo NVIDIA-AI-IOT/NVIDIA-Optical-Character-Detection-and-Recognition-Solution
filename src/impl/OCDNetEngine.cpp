@@ -55,6 +55,7 @@ size_t OCDNetEngine::getOutputChannels() {
 void OCDNetEngine::computeTextCandidates(const cv::Mat& mask, std::vector<QUADANGLE>* const quads,
                                          std::vector<Text>* const texts, size_t* num_text,
                                          const ProcessParam& process_param) {
+  mTextCntrCandidates.clear();
   if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
     computeTextCandidatesMixNet(mask, quads, texts, num_text, process_param);
   } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {

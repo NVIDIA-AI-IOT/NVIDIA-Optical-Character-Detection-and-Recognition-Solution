@@ -11,6 +11,7 @@
 #include "OCRNetEngine.h"
 #include "nvocdr.h"
 #include "opencv2/opencv.hpp"
+#include "timer.hpp"
 
 namespace nvocdr {
 static constexpr float IMG_MEAN_GRAY = 127.5;
@@ -21,11 +22,13 @@ static constexpr float IMG_MEAN_R = 122.67891434;
 static constexpr float IMG_SCALE_BRG = 0.00392156;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;
+static constexpr size_t TIME_HISTORY_SIZE = 100;
 
 class nvOCDR {
  public:
   nvOCDR(const nvOCDRParam& param);
   void process(const nvOCDRInput& input, nvOCDROutput* const output);
+  void printTimeStat();
 
  private:
   void processTile(const nvOCDRInput& input);
@@ -70,5 +73,9 @@ class nvOCDR {
 
   cudaStream_t mStream;
   nvOCDRParam mParam;
+  Timer<TIME_HISTORY_SIZE> mOCDTimer;
+  Timer<TIME_HISTORY_SIZE> mSelectProcessTimer;
+  Timer<TIME_HISTORY_SIZE> mOCRTimer;
+  Timer<TIME_HISTORY_SIZE> mE2ETimer;
 };
 }  // namespace nvocdr

@@ -101,7 +101,11 @@ namespace nvocdr
         return output;
       }
 
-      bool parse_args(int argc, char **argv)
+      void printStat() {
+        nvOCDR_print_stat(mHandler);
+      }
+
+      bool parseArgs(int argc, char **argv)
       {
         po::options_description desc("nvOCDR sample options");
         desc.add_options()
@@ -189,7 +193,10 @@ namespace nvocdr
 
         return true;
       }
-      std::string mImagePath;
+
+      inline std::string getImagePath() const {
+        return mImagePath;
+      }
 
     private:
       static bool parseStrArgs(const po::variables_map &vm, const std::string name, char *const dst)
@@ -212,6 +219,7 @@ namespace nvocdr
       nvOCDRParam mParam = DEFAULT_PARAM;
       bool mShowScore;
       bool mShowText;
+      std::string mImagePath;
     };
   };
 }

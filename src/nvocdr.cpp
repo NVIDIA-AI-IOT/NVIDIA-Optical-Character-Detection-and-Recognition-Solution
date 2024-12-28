@@ -21,3 +21,8 @@ bool nvOCDR_process(void* const nvocdr_handler, const nvOCDRInput& input,
   handler->process(input, output);
   return true;
 }
+
+void nvOCDR_print_stat(void* const nvocdr_handler) {
+    nvocdr::nvOCDR* handler = reinterpret_cast<nvocdr::nvOCDR*>(nvocdr_handler);
+    handler->printTimeStat();
+}
