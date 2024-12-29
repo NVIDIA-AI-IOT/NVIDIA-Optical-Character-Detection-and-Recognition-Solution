@@ -107,12 +107,32 @@ TRTEngine::setInputBuffer(void* buffer)
     mContext->setTensorAddress(mInputName.c_str(), buffer);
 }
 
+void
+TRTEngine::setInputBufferbyName(void* buffer, std::string& tensorName)
+{
+    mContext->setTensorAddress(tensorName.c_str(), buffer);
+}
+
 
 void
 TRTEngine::setInputShape(const Dims shape)
 {
     mContext->setInputShape(mInputName.c_str(), shape);
     mExactInputShape = shape;
+    mExactOutputShapes.clear();
+    for(int i = 0; i < mOutputNames.size(); ++i)
+    {
+        mExactOutputShapes.emplace(mOutputNames[i], mContext->getTensorShape(mOutputNames[i].c_str()));
+    }
+}
+
+
+void
+TRTEngine::setInputBatchSizebyName(const std::string& tensorName, const int batch_size)
+{
+    nvinfer1::Dims maxInputShape = mEngine->getProfileShape(tensorName.c_str(), 0, OptProfileSelector::kMAX);
+    maxInputShape.d[0] = batch_size;
+    mContext->setInputShape(tensorName.c_str(), maxInputShape);
     mExactOutputShapes.clear();
     for(int i = 0; i < mOutputNames.size(); ++i)
     {
@@ -139,6 +159,41 @@ TRTEngine::getMaxOutputBufferSize()
 }
 
 
+size_t 
+TRTEngine::getMaxTrtIoTensorSizeByName(std::string& tensorName)
+{
+    nvinfer1::Dims tensorDims = mContext->getTensorShape(tensorName.c_str());
+
+    size_t data_size = 1;
+    for(int i = 0; i < tensorDims.nbDims; ++i)
+    {
+        if (tensorDims.d[i] == -1)
+        {
+            data_size *= mMaxBatchSize;
+        }
+        else
+        {
+            data_size *= tensorDims.d[i];
+        }
+        
+    }
+    return data_size;
+}
+
+
+size_t 
+TRTEngine::getTrtIoTensorDtypeSizeByName(std::string& tensorName)
+{
+    int bindingIndex = mEngine->getBindingIndex(tensorName.c_str());
+    if (bindingIndex == -1) {
+        std::cerr << "Tensor name not found in the engine." << std::endl;
+        return 0;
+    }
+    nvinfer1::DataType dataType = mEngine->getBindingDataType(bindingIndex);
+    return sizeof(dataType);
+}
+
+
 void
 TRTEngine::setOutputBuffer(void* buffer)
 {
@@ -156,6 +211,12 @@ TRTEngine::setOutputBuffer(void* buffer)
         }
         offset += data_size;
     }
+}
+
+
+void TRTEngine::setOutputBufferByName(void* buffer, std::string& tensorName)
+{
+    mContext->setTensorAddress(tensorName.c_str(), buffer);
 }
 
 

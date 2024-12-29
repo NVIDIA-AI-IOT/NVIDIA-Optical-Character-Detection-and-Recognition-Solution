@@ -75,7 +75,7 @@ int main()
     // Please pay attention to the following parameters. You may need to change them according to different models.
     nvOCDRParam param;
     param.input_data_format = NHWC;
-    param.ocdnet_trt_engine_path = (char *)"/localhome/local-bizhao/models/ocdnet.fp16.engine";
+    param.ocdnet_trt_engine_path = (char *)"/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models/ocdnet_vit.fp16.engine";
     param.ocdnet_infer_input_shape[0] = 3;
     param.ocdnet_infer_input_shape[1] = 736;
     param.ocdnet_infer_input_shape[2] = 1280;
@@ -83,16 +83,22 @@ int main()
     param.ocdnet_polygon_threshold = 0.3;
     param.ocdnet_max_candidate = 200;
     param.ocdnet_unclip_ratio = 1.5;
-    param.ocrnet_trt_engine_path = (char *)"/localhome/local-bizhao/output/vl4str_base_pcb_10_split_oversample.ckpt.img.fp32.onnx_sim.onnx.fp16.engine";
-    param.ocrnet_dict_file = (char *)"/localhome/local-bizhao/models/character_list";
+    param.ocrnet_trt_engine_path = (char *)"/home/binz/CLIP4STR_nvCLIP/trained_with_nvclip/best_ckpt/vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.visual.sim.fp16.engine";
+    param.ocrnet_text_trt_engine_path = (char *)"/home/binz/CLIP4STR_nvCLIP/trained_with_nvclip/best_ckpt/vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.text.sim.fp16.engine";
+    param.ocrnet_vocab_file = (char *)"/home/binz/CLIP4STR_nvCLIP/code/CLIP4STR/strhub/clip/bpe_simple_vocab_16e6.txt";
+    param.ocrnet_vocab_size = 32000;
+    param.ocrnet_dict_file = (char *)"/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models/character_list_clip4str";
     param.ocrnet_infer_input_shape[0] = 3;
     param.ocrnet_infer_input_shape[1] = 224;
     param.ocrnet_infer_input_shape[2] = 224;
-    param.ocrnet_decode = CLIP;
+    param.ocrnet_decode = Transformer;
+    param.ocrnet_only_alnum = false;
+    param.ocrnet_only_lowercase = false;
+
     nvOCDRp nvocdr_ptr = nvOCDR_init(param);
 
     // Load the input
-    const char* img_path = "/localhome/local-bizhao/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/c++_samples/test_img/scene_text.jpg";
+    const char* img_path = "/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/c++_samples/test_img/nvocdr.jpg";
     cv::Mat img = cv::imread(img_path);
     nvOCDRInput input;
     input.device_type = GPU;
@@ -110,8 +116,8 @@ int main()
     nvOCDR_inference(input, &output, nvocdr_ptr);
     
     // filter the output text, and covert to lowercase
-    std::string keeped_charset = "0123456789abcdefghijklmnopqrstuvwxyz";
-    textFilter(output, keeped_charset);
+    std::string keeped_charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";;
+    textFilter(output, keeped_charset, param.ocrnet_only_lowercase);
 
     // Visualize the output
     int offset = 0;

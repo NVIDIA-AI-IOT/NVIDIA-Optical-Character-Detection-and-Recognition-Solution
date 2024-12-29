@@ -15,7 +15,7 @@ RectEngine::RectEngine(const int& output_height, const int& output_width, const 
     checkCudaErrors(cublasCreate(&mHandle));
     mIsRGBOutput = (rec_output_channel==3) ? true : false;
 #ifdef RECT_DEBUG
-    mImgSavePath = "/localhome/local-bizhao/dataset/pcb_images/FRAME_0_1_H.jpg";
+    mImgSavePath = "/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/c++_samples/test_img/";
 #endif
 }
 
@@ -52,6 +52,10 @@ bool RectEngine::initBuffer(BufferManager& buffer_mgr)
     {
         // if we use gray ouput, we need to init this RGB buff to calculate the gray ouput 
         mRGBOutputBufferDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch*3*mOutputHeight*mOutputWidth, sizeof(float));
+    }
+    else
+    {
+        mGrayOutputBufferDevIdx = buffer_mgr.initDeviceBuffer(mOcrInferBatch*mOutputHeight*mOutputWidth, sizeof(float));
     }
 
 #ifdef RECT_DEBUG
@@ -140,56 +144,72 @@ RectEngine::infer(void* input_data, const Dims& input_shape,
 
 #ifdef RECT_DEBUG
     int img_size = input_shape.d[1] * input_shape.d[2] * input_shape.d[3];
-    checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].nbBytes(), cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mRGBOutputBufferDevIdx].data(), buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].size()*sizeof(float), cudaMemcpyDeviceToHost));
+    if (!mIsRGBOutput)
+    {
+        checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].data(), buffer_mgr.mDeviceBuffer[mGrayOutputBufferDevIdx].nbBytes(), cudaMemcpyDeviceToHost));
+    }
+    else
+    {
+        checkCudaErrors(cudaMemcpy(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data(), buffer_mgr.mDeviceBuffer[mRGBOutputBufferDevIdx].data(), buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].size()*sizeof(float), cudaMemcpyDeviceToHost));
+    }
     for (int idx_poly=0; idx_poly<polys_to_imgs.size(); ++idx_poly)
     {
-        // write pt image
-        int pt_img_size = 3*mOutputWidth*mOutputHeight;
-        
-        uchar* h_pt_data = static_cast<uchar*>(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data() + idx_poly*pt_img_size);
-        cv::Mat pt_frame(mOutputHeight, mOutputWidth, CV_8UC3, h_pt_data);
-        std::string pt_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_pt_cuda.png";
-        cv::imwrite(pt_img_file, pt_frame);
-        
-        // write  gray img
-        int gray_img_size = mOutputWidth*mOutputHeight;
-        float* h_gray_data = static_cast<float*>( buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data()+ idx_poly*gray_img_size*sizeof(float));
-        uchar h_gray_data_uchar[224*224];
-        float gray_data;
-        for(int n=0; n<gray_img_size; ++n)
+        if (mIsRGBOutput)
         {
-             if(typeid(float) == typeid(gray_data))
+            // write pt image
+            int pt_img_size = 3*mOutputWidth*mOutputHeight;
+            
+            float* h_pt_data = static_cast<float*>(buffer_mgr.mHostBuffer[mRGBOutputBufferHostIdx].data() + idx_poly*pt_img_size*sizeof(float));
+            uchar h_pt_data_uchar[3*224*224];
+            for(int n=0; n<pt_img_size; ++n)
             {
-                h_gray_data_uchar[n] = (uchar)(h_gray_data[n]*127.5 + 127.5);
+                h_pt_data_uchar[n] = (uchar)(255*(h_pt_data[n]*0.26 + 0.45));   
             }
-            else
-            {
-                h_gray_data_uchar[n] = (uchar)(h_gray_data[n]);
-            }
+            cv::Mat pt_frame(mOutputHeight, mOutputWidth, CV_8UC3, h_pt_data_uchar);
+            std::string pt_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_pt_cuda.png";
+            cv::imwrite(pt_img_file, pt_frame);
         }
-        
-        cv::Mat gray_frame(mOutputHeight, mOutputWidth, CV_8UC1, h_gray_data_uchar);
-        std::string gray_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_gray_cuda.png";
-        cv::imwrite(gray_img_file, gray_frame);
-        if(mUDFlag)
+        else
         {
-            // write  gray upsidedown img
-            float* h_gray_UDdata = static_cast<float*>(buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data()+(idx_poly+polys_to_imgs.size())*gray_img_size*sizeof(float));
+            // write  gray img
+            int gray_img_size = mOutputWidth*mOutputHeight;
+            float* h_gray_data = static_cast<float*>( buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data()+ idx_poly*gray_img_size*sizeof(float));
+            uchar h_gray_data_uchar[224*224];
+            float gray_data;
             for(int n=0; n<gray_img_size; ++n)
             {
                 if(typeid(float) == typeid(gray_data))
                 {
-                    h_gray_data_uchar[n] = (uchar)(h_gray_UDdata[n]*127.5 + 127.5);
+                    h_gray_data_uchar[n] = (uchar)(h_gray_data[n]*127.5 + 127.5);
                 }
                 else
                 {
-                    h_gray_data_uchar[n] = (uchar)(h_gray_UDdata[n]);
+                    h_gray_data_uchar[n] = (uchar)(h_gray_data[n]);
                 }
             }
-            cv::Mat gray_UDframe(mOutputHeight, mOutputWidth, CV_8UC1, h_gray_data_uchar);
-            std::string gray_UD_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_gray_UD_cuda.png";
-            cv::imwrite(gray_UD_img_file, gray_UDframe); 
+            
+            cv::Mat gray_frame(mOutputHeight, mOutputWidth, CV_8UC1, h_gray_data_uchar);
+            std::string gray_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_gray_cuda.png";
+            cv::imwrite(gray_img_file, gray_frame);
+            if(mUDFlag)
+            {
+                // write  gray upsidedown img
+                float* h_gray_UDdata = static_cast<float*>(buffer_mgr.mHostBuffer[mGrayOutputBufferHostIdx].data()+(idx_poly+polys_to_imgs.size())*gray_img_size*sizeof(float));
+                for(int n=0; n<gray_img_size; ++n)
+                {
+                    if(typeid(float) == typeid(gray_data))
+                    {
+                        h_gray_data_uchar[n] = (uchar)(h_gray_UDdata[n]*127.5 + 127.5);
+                    }
+                    else
+                    {
+                        h_gray_data_uchar[n] = (uchar)(h_gray_UDdata[n]);
+                    }
+                }
+                cv::Mat gray_UDframe(mOutputHeight, mOutputWidth, CV_8UC1, h_gray_data_uchar);
+                std::string gray_UD_img_file = mImgSavePath + std::to_string(polys_to_imgs[idx_poly]) + '_' + std::to_string(idx_poly) + "_gray_UD_cuda.png";
+                cv::imwrite(gray_UD_img_file, gray_UDframe); 
+            }
         }
     }
 #endif
