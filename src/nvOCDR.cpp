@@ -285,9 +285,9 @@ nvOCDR::nvOCDR(nvOCDRParam param):
     {
         decode_mode = DecodeMode::Attention;
     }
-    else if (param.ocrnet_decode == OCRNetDecode::CLIP)
+    else if (param.ocrnet_decode == OCRNetDecode::Transformer)
     {
-        decode_mode = DecodeMode::CLIP;
+        decode_mode = DecodeMode::Transformer;
     }
     else
     {
@@ -296,14 +296,32 @@ nvOCDR::nvOCDR(nvOCDRParam param):
         
     // Init ocrnet
     std::string ocr_engine_path(param.ocrnet_trt_engine_path);
+    std::string ocr_text_engine_path = "";
+    std::string vocab_file = "";
+    bool only_alnum = true;
+    bool only_lowercase = true;
+    int vocab_size = 0;
+    if (param.ocrnet_decode == OCRNetDecode::Transformer)
+    {
+        ocr_text_engine_path = std::string(param.ocrnet_text_trt_engine_path);
+        only_alnum = param.ocrnet_only_alnum;
+        only_lowercase = param.ocrnet_only_lowercase;
+        vocab_file = std::string(param.ocrnet_vocab_file);
+        vocab_size = param.ocrnet_vocab_size;
+    }
     std::string ocr_dict_path(param.ocrnet_dict_file);
     mOCRNet = std::move(std::unique_ptr<OCRNetEngine>(new OCRNetEngine(ocr_engine_path,
                                                                        ocr_dict_path,
                                                                        upsidedown,
-                                                                       decode_mode)));
+                                                                       decode_mode,
+                                                                       ocr_text_engine_path,
+                                                                       only_alnum,
+                                                                       only_lowercase,
+                                                                       vocab_file,
+                                                                       vocab_size)));
     // Init input and output buffer for OCRNet TRT inference
     mOCRNet->initTRTBuffer(mBuffMgr);
-    mOCRNetInputShape.nbDims=4;
+    mOCRNetInputShape.nbDims = 4;
     mOCRNetInputShape.d[0] = -1; // Dynamic batch size
     mOCRNetInputShape.d[1] = param.ocrnet_infer_input_shape[0];
     mOCRNetInputShape.d[2] = param.ocrnet_infer_input_shape[1];

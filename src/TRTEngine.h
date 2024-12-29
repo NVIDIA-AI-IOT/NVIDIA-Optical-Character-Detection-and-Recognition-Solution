@@ -45,7 +45,11 @@ class TRTEngine
         // Manager will only give a buffer with max size and let TRT Engine to use the buffer
         void setInputBuffer(void* buffer);
 
+        void setInputBufferbyName(void* buffer, std::string& tensorName);
+
         void setInputShape(const Dims shape);
+
+        void setInputBatchSizebyName(const std::string& tensorName, const int batch_size);
 
         size_t getMaxInputBufferSize();
 
@@ -57,7 +61,13 @@ class TRTEngine
 
         size_t getMaxOutputBufferSize();
 
+        size_t getMaxTrtIoTensorSizeByName(std::string& tensorName);
+
+        size_t getTrtIoTensorDtypeSizeByName(std::string& tensorName);
+
         void setOutputBuffer(void* buffer);
+
+        void setOutputBufferByName(void* buffer, std::string& tensorName);
 
         const void* getOutputAddr(std::string output_name);
 

@@ -45,7 +45,7 @@ int main()
     // Please pay attention to the following parameters. You may need to change them according to different models.
     nvOCDRParam param;
     param.input_data_format = NHWC;
-    param.ocdnet_trt_engine_path = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv2_models/ocdnet.fp16.engine";
+    param.ocdnet_trt_engine_path = (char *)"/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models/ocdnet_vit.fp16.engine";
     param.ocdnet_infer_input_shape[0] = 3;
     param.ocdnet_infer_input_shape[1] = 736;
     param.ocdnet_infer_input_shape[2] = 1280;
@@ -53,8 +53,8 @@ int main()
     param.ocdnet_polygon_threshold = 0.3;
     param.ocdnet_max_candidate = 200;
     param.ocdnet_unclip_ratio = 1.5;
-    param.ocrnet_trt_engine_path = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv2_models/ocrnet.fp16.engine";
-    param.ocrnet_dict_file = (char *)"/hdd_10t/tylerz/CTSE_DL/github/ptmv2_models/character_list";
+    param.ocrnet_trt_engine_path = (char *)"/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models/ocrnet_vit.fp16.engine";
+    param.ocrnet_dict_file = (char *)"/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/onnx_models/character_list";
     param.ocrnet_infer_input_shape[0] = 1;
     param.ocrnet_infer_input_shape[1] = 64;
     param.ocrnet_infer_input_shape[2] = 200;
@@ -62,7 +62,7 @@ int main()
     nvOCDRp nvocdr_ptr = nvOCDR_init(param);
 
     // Load the input
-    const char* img_path = "/hdd_10t/tylerz/CTSE_DL/github/scene_text.jpg";
+    const char* img_path = "/home/binz/ssd_4t/NVIDIA-Optical-Character-Detection-and-Recognition-Solution/c++_samples/test_img/scene_text.jpg";
     cv::Mat img = cv::imread(img_path);
     nvOCDRInput input;
     input.device_type = GPU;
