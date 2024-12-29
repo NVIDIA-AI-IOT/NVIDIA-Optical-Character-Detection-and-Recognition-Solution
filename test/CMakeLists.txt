@@ -6,8 +6,10 @@ if(NOT GTest_FOUND)
   message(FATAL_ERROR "GTest not found")
 endif()
 
-add_executable(nvocdr_basic_test nvocdr_basic_test.cpp)
-target_link_libraries(nvocdr_basic_test PRIVATE GTest::gtest_main nvocdr)
+file(GLOB NVOCDR_TEST_SRC *.cpp)
+
+add_executable(nvocdr_test ${NVOCDR_TEST_SRC})
+target_link_libraries(nvocdr_test PRIVATE ${OpenCV_LIBS} GTest::gtest_main glog::glog nvocdr )
 
 # add_test(NAME ThisIsTestA COMMAND nvocdr_basic_test WORKING_DIRECTORY ${DIRECTORY_WITH_TEST_DATA})
 

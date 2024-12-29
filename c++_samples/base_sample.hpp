@@ -8,30 +8,6 @@ namespace nvocdr
 
   namespace sample
   {
-    static nvOCDRParam DEFAULT_PARAM{
-        .ocd_param = {
-            .model_file = '\0',
-            .batch_size = 0,
-            .type = nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL
-        },
-        .ocr_param = {
-          .model_file = '\0', 
-          .dict = '\0', 
-          .batch_size = 0, 
-          .type = nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC
-        },
-        .process_param{
-          .strategy = STRATEGY_TYPE_SMART, 
-          .max_candidate = 200, 
-          .polygon_threshold = 0.3F, 
-          .binarize_lower_threshold = 0.F, 
-          .binarize_upper_threshold = 0.1F, 
-          .min_pixel_area = 10,
-          .debug_log = false,
-          .debug_image = false,
-          .all_direction = false
-        }
-      };
     class OCDRInferenceSample
     {
     public:
@@ -216,7 +192,7 @@ namespace nvocdr
       }
 
       void *mHandler = nullptr;
-      nvOCDRParam mParam = DEFAULT_PARAM;
+      nvOCDRParam mParam;
       bool mShowScore;
       bool mShowText;
       std::string mImagePath;

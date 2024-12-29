@@ -116,7 +116,7 @@ void OCRNetEngine::decodeCTC(Text* const text, size_t idx) {
 
 void OCRNetEngine::decodeATTNOrCLIP(Text* const text, size_t idx, const std::string& ending) {
 
-  int offset = idx * mOutputCharLength;
+  size_t offset = idx * mOutputCharLength;
   float* prob = reinterpret_cast<float*>(
                     mBufManager.getBuffer(getBufName(OCRNET_OUTPUT_PROB), BUFFER_TYPE::HOST)) +
                 offset;

@@ -14,28 +14,41 @@ inline size_t getCnt(size_t input, size_t raw, size_t stride) {
     return (raw - input) % stride == 0 ? (raw - input) / stride + 1 : (raw - input) / stride + 2;
   }
 }
-void nvOCDR::getTilePlan(size_t input_w, size_t input_h, size_t raw_w, size_t raw_h,
-                         size_t stride) {
-  LOG_IF(ERROR, mParam.process_param.debug_log)
-      << input_w << " " << input_h << " " << raw_w << " " << raw_h << " " << stride << "\n";
-  size_t h_cnt = getCnt(input_h, raw_h, stride);
-  size_t w_cnt = getCnt(input_w, raw_w, stride);
 
-  LOG_IF(ERROR, mParam.process_param.debug_log)
-      << "plan h steps: " << h_cnt << ", w steps " << w_cnt;
+void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
+  mE2ETimer.Start();
 
-  mTiles.clear();
-  for (size_t i = 0; i < h_cnt; ++i) {
-    for (size_t j = 0; j < w_cnt; ++j) {
-      // all tile guarenteed to be inside the image
-      cv::Point br(std::min(j * stride + input_w, raw_w), std::min(i * stride + input_h, raw_h));
-      cv::Point tl(std::max(br.x - static_cast<int>(input_w), 0),
-                   std::max(br.y - static_cast<int>(input_h), 0));
-      mTiles.emplace_back(tl, br);
-      LOG_IF(ERROR, mParam.process_param.debug_log) << "tile " << mTiles.back();
-    }
+  // restore image from buffer to cv::Mat, handle data order/channel
+  restoreImage(input);
+  // handle different strategy ,mResizeInfo will be set
+  handleStrategy(input);
+  // preprocess the data, like normalization
+  preprocessInputImage();
+  // all strategy will map to uniformed tile processing,
+  processTile(input);
+  // set the output
+  setOutput(output);
+
+  // wall time of processing
+  mE2ETimer.Stop();
+}
+
+void nvOCDR::restoreImage(const nvOCDRInput& input) {
+
+  if (input.data_format == DATAFORMAT_TYPE_HWC) {
+    mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel),
+                          input.data, cv::Mat::AUTO_STEP);
+  } else {
+    // todo(shuohanc) restore from chw.
+    LOG(ERROR) << "not implemented CHW";
+    throw std::runtime_error("not implement CHW");
+  }
+
+  if (mInputImage.empty()) {
+    throw std::runtime_error("input empty");
   }
 }
+
 void nvOCDR::handleStrategy(const nvOCDRInput& input) {
   const auto ocd_input_h = static_cast<int>(mOCDNet->getInputH());
   const auto ocd_input_w = static_cast<int>(mOCDNet->getInputW());
@@ -101,39 +114,29 @@ void nvOCDR::handleStrategy(const nvOCDRInput& input) {
   mOCDValidCntMap = cv::Mat(mResizeInfo.second, CV_32F, cv::Scalar(0.F));
 }
 
-void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
-  mE2ETimer.Start();
+void nvOCDR::getTilePlan(size_t input_w, size_t input_h, size_t raw_w, size_t raw_h,
+                         size_t stride) {
+  LOG_IF(ERROR, mParam.process_param.debug_log)
+      << input_w << " " << input_h << " " << raw_w << " " << raw_h << " " << stride << "\n";
+  size_t h_cnt = getCnt(input_h, raw_h, stride);
+  size_t w_cnt = getCnt(input_w, raw_w, stride);
 
-  // restore image from buffer to cv::Mat, handle data order/channel
-  restoreImage(input);
-  // handle different strategy ,mResizeInfo will be set
-  handleStrategy(input);
-  // preprocess the data, like normalization
-  preprocessInputImage();
-  // all strategy will map to uniformed tile processing,
-  processTile(input);
-  // set the output
-  setOutput(output);
+  LOG_IF(ERROR, mParam.process_param.debug_log)
+      << "plan h steps: " << h_cnt << ", w steps " << w_cnt;
 
-  // wall time of processing
-  mE2ETimer.Stop();
-}
-
-void nvOCDR::restoreImage(const nvOCDRInput& input) {
-
-  if (input.data_format == DATAFORMAT_TYPE_HWC) {
-    mInputImage = cv::Mat(cv::Size(input.width, input.height), CV_8UC(input.num_channel),
-                          input.data, cv::Mat::AUTO_STEP);
-  } else {
-    // todo(shuohanc) restore from chw.
-    LOG(ERROR) << "not implemented CHW";
-    throw std::runtime_error("not implement CHW");
-  }
-
-  if (mInputImage.empty()) {
-    throw std::runtime_error("input empty");
+  mTiles.clear();
+  for (size_t i = 0; i < h_cnt; ++i) {
+    for (size_t j = 0; j < w_cnt; ++j) {
+      // all tile guarenteed to be inside the image
+      cv::Point br(std::min(j * stride + input_w, raw_w), std::min(i * stride + input_h, raw_h));
+      cv::Point tl(std::max(br.x - static_cast<int>(input_w), 0),
+                   std::max(br.y - static_cast<int>(input_h), 0));
+      mTiles.emplace_back(tl, br);
+      LOG_IF(ERROR, mParam.process_param.debug_log) << "tile " << mTiles.back();
+    }
   }
 }
+
 
 void nvOCDR::setOutput(nvOCDROutput* const output) {
   output->num_texts = mNumTexts;
@@ -230,10 +233,12 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
     size_t end_idx = std::min((i + 1) * num_ocr_bs, mNumTexts);
     for (auto const& bl_idx : directions) {
       preprocessOCR(start_idx, end_idx, bl_idx);
+
       mOCRNet->syncMemory(true, true, mStream);
       mOCRNet->infer();
       mOCRNet->syncMemory(false, false, mStream);
       cudaStreamSynchronize(mStream);
+
       postprocessOCR(start_idx, end_idx);
     }
   }
@@ -372,11 +377,11 @@ nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
   mQuadPts.resize(param.process_param.max_candidate);
   cudaStreamCreate(&mStream);
 
-  LOG(INFO) << "==== init ocr ====";
+  LOG(INFO) << "================= init ocr =================";
   mOCRNet = std::make_unique<OCRNetEngine>(OCR_PREFIX, param.ocr_param);
   mOCRNet->init();
 
-  LOG(INFO) << "==== init ocd ====";
+  LOG(INFO) << "================= init ocd =================";
   mOCDNet = std::make_unique<OCDNetEngine>(OCD_PREFIX, param.ocd_param);
   mOCDNet->init();
 
@@ -400,7 +405,7 @@ void nvOCDR::printTimeStat() {
   LOG(INFO) << "ocd: " << ocd_mean << "ms / " << static_cast<int>(ocd_mean / e2e_mean * 100) << "%"; 
   LOG(INFO) << "ocr: " << ocr_mean << "ms / " << static_cast<int>(ocr_mean / e2e_mean * 100) << "%"; 
 
-  LOG(INFO) << "e2e_mean: " << e2e_mean <<"ms"; 
+  LOG(INFO) << "e2e: " << e2e_mean <<"ms"; 
 }
 
 }  // namespace nvocdr

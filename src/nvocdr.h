@@ -23,16 +23,16 @@ enum STRATEGY_TYPE {
 };
 
 typedef struct {
-  STRATEGY_TYPE strategy;
-  size_t max_candidate;
-  float polygon_threshold;
-  float binarize_lower_threshold;
-  float binarize_upper_threshold;
-  float min_pixel_area;
-  bool debug_log;
-  bool debug_image;
-  bool
-      all_direction;  // if true, 4 direction will be detected, otherwise only one, will consume more time
+  STRATEGY_TYPE strategy = STRATEGY_TYPE_SMART;
+  size_t max_candidate = 100;
+  float polygon_threshold = 0.3F;
+  float binarize_lower_threshold = 0.F;
+  float binarize_upper_threshold = 0.1F;
+  float min_pixel_area = 10;
+  bool debug_log = false;
+  bool debug_image = false;
+  // if true, 4 direction will be detected, otherwise only one, will consume more time
+  bool all_direction = false;  
 } ProcessParam;
 
 typedef struct {
@@ -40,17 +40,17 @@ typedef struct {
     OCD_MODEL_TYPE_NORMAL,
     OCD_MODEL_TYPE_MIXNET,
   };
-  char model_file[MAX_FILE_PATH];
+  char model_file[MAX_FILE_PATH] = "";
   size_t batch_size = 0;  // bs use to do infer, tune it for device with different mem
-  OCD_MODEL_TYPE type;
+  OCD_MODEL_TYPE type = OCD_MODEL_TYPE_NORMAL;
 } nvOCDParam;
 
 typedef struct {
   enum OCR_MODEL_TYPE { OCR_MODEL_TYPE_CTC, OCR_MODEL_TYPE_ATTN, OCR_MODEL_TYPE_CLIP };
   char model_file[MAX_FILE_PATH];
-  char dict[MAX_FILE_PATH];
-  size_t batch_size =
-      0;  // bs use to do infer, tune it for device with different mem, -1 to use engine allowed max
+  char dict[MAX_FILE_PATH] = "default";
+  // bs use to do infer, tune it for device with different mem, -1 to use engine allowed max
+  size_t batch_size =0;  
   OCR_MODEL_TYPE type = OCR_MODEL_TYPE_CTC;
 } nvOCRParam;
 
@@ -70,13 +70,13 @@ typedef struct {
   // input data is owned by user, user responsible for allocate and deallocated
   void*
       data;  // pointer to data in shape [batch_size, height, width, num_channel] or [batch_size, num_channel, height, width]
-  DATAFORMAT_TYPE data_format;  // indicate data format in mem
+  DATAFORMAT_TYPE data_format = DATAFORMAT_TYPE_HWC;  // indicate data format in mem
 } nvOCDRInput;
 
 typedef struct {
   float polygon[8];  // x,y, ...
   size_t text_length = 0;
-  char text[MAX_CHARACTER_LEN];
+  char text[MAX_CHARACTER_LEN] = "";
   float conf = 0.F;
 } Text;
 
@@ -86,6 +86,7 @@ typedef struct {
   Text* texts;
 } nvOCDROutput;
 
+nvOCDRParam nvOCDR_get_default();
 void* nvOCDR_initialize(const nvOCDRParam& param);
 bool nvOCDR_process(void* const nvocdr_handler, const nvOCDRInput& input,
                     nvOCDROutput* const output);
