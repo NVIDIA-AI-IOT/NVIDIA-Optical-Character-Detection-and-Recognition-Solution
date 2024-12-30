@@ -219,7 +219,6 @@ using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 //     HostBuffer hostBuffer;
 // };
 
-// todo(shuohanc) release singleton
 enum BUFFER_TYPE : uint8_t 
 { DEVICE, HOST };
 class BufferManager {
@@ -230,6 +229,7 @@ class BufferManager {
   size_t getBufferSize(const std::string& name);
   void copyDeviceToHost(const std::string& name, const cudaStream_t& stream);
   void copyHostToDevice(const std::string& name, const cudaStream_t& stream);
+  void releaseAllBuffers();
 
   static BufferManager& Instance() {
     static BufferManager singleton;

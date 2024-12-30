@@ -27,6 +27,9 @@ static constexpr size_t TIME_HISTORY_SIZE = 100;
 class nvOCDR {
  public:
   nvOCDR(const nvOCDRParam& param);
+  ~nvOCDR() {
+    mBufManager.releaseAllBuffers();
+  }
   void process(const nvOCDRInput& input, nvOCDROutput* const output);
   void printTimeStat();
 

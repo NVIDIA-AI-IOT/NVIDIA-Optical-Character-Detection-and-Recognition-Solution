@@ -10,6 +10,7 @@ find_package(CUDA REQUIRED)
 find_package(glog 0.4.0 REQUIRED)
 
 option(BUILD_TESTS "Build test cases" ON)
+option(BUILD_SAMPLES "Build samples" ON)
 
 if(OpenCV_FOUND)
     message("-- Found OpenCV, includes headers: " ${OpenCV_INCLUDE_DIRS})
@@ -30,7 +31,10 @@ else()
 endif()
 
 add_subdirectory(src)
-add_subdirectory(c++_samples)
+
+if(BUILD_SAMPLES)
+  add_subdirectory(samples)
+endif()
 
 if(BUILD_TESTS)
   add_subdirectory(test)

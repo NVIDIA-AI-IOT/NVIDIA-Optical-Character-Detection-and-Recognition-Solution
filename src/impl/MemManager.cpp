@@ -15,6 +15,8 @@ void BufferManager::initBuffer(const std::string& name, const size_t& size, bool
     mDeviceBuffer[name].resize(size);
     LOG(INFO) << "init device buffer for '" << name << "' with bytes: " << size << "\n";
     mNumBytes[name] = size;
+  } else {
+    LOG(WARNING) << "device buffer already exist: " << name;
   }
   if (host_buf && mHostBuffer.count(name) == 0) {
     mHostBuffer[name].resize(size);
@@ -58,5 +60,11 @@ size_t BufferManager::getBufferSize(const std::string& name) {
   }
   return 0;
 }
+
+void BufferManager::releaseAllBuffers() {
+  mDeviceBuffer.clear();
+  mHostBuffer.clear();
+}
+
 
 }  // namespace nvocdr
