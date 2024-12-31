@@ -1,82 +1,23 @@
 #pragma once
-#include <cublas_v2.h>
-#include <cuda.h>
-#include <cuda_runtime.h>
 
 #include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <set>
+
+#include <NvInfer.h>
 
 namespace nvocdr {
 // NOLINTBEGIN
-#ifndef checkKernelErrors
-#define checkKernelErrors(expr)                                                         \
-  do {                                                                                  \
-    expr;                                                                               \
-                                                                                        \
-    cudaError_t __err = cudaGetLastError();                                             \
-    if (__err != cudaSuccess) {                                                         \
-      printf("Line %d: '%s' failed: %s\n", __LINE__, #expr, cudaGetErrorString(__err)); \
-      abort();                                                                          \
-    }                                                                                   \
-  } while (0)
-#endif
 
-// CUDA Runtime error messages
-static const char* _cudaGetErrorEnum(cudaError_t error) {
-  return cudaGetErrorName(error);
-}
-
-// cuBLAS API errors
-static const char* _cudaGetErrorEnum(cublasStatus_t error) {
-  switch (error) {
-    case CUBLAS_STATUS_SUCCESS:
-      return "CUBLAS_STATUS_SUCCESS";
-
-    case CUBLAS_STATUS_NOT_INITIALIZED:
-      return "CUBLAS_STATUS_NOT_INITIALIZED";
-
-    case CUBLAS_STATUS_ALLOC_FAILED:
-      return "CUBLAS_STATUS_ALLOC_FAILED";
-
-    case CUBLAS_STATUS_INVALID_VALUE:
-      return "CUBLAS_STATUS_INVALID_VALUE";
-
-    case CUBLAS_STATUS_ARCH_MISMATCH:
-      return "CUBLAS_STATUS_ARCH_MISMATCH";
-
-    case CUBLAS_STATUS_MAPPING_ERROR:
-      return "CUBLAS_STATUS_MAPPING_ERROR";
-
-    case CUBLAS_STATUS_EXECUTION_FAILED:
-      return "CUBLAS_STATUS_EXECUTION_FAILED";
-
-    case CUBLAS_STATUS_INTERNAL_ERROR:
-      return "CUBLAS_STATUS_INTERNAL_ERROR";
-
-    case CUBLAS_STATUS_NOT_SUPPORTED:
-      return "CUBLAS_STATUS_NOT_SUPPORTED";
-
-    case CUBLAS_STATUS_LICENSE_ERROR:
-      return "CUBLAS_STATUS_LICENSE_ERROR";
+inline size_t volume(const nvinfer1::Dims& dim) {
+  size_t data_size = 1;
+  for (size_t i = 0; i < dim.nbDims; i++) {
+    data_size *= dim.d[i];
   }
-
-  return "<unknown>";
+  return data_size;
 }
-
-template <typename T>
-void check(T result, char const* const func, const char* const file, int const line) {
-  if (result) {
-    fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\" \n", file, line,
-            static_cast<unsigned int>(result), _cudaGetErrorEnum(result), func);
-    exit(EXIT_FAILURE);
-  }
-}
-
-// This will output the proper CUDA error strings in the event
-// that a CUDA host call returns an error
-#define checkCudaErrors(val) check((val), #val, __FILE__, __LINE__)
 
 //!
 //! \brief  The GenericBuffer class is a templated class for buffers.
@@ -99,53 +40,10 @@ class GenericBuffer {
   //!
   //! \brief Construct an empty buffer.
   //!
-  // GenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
   GenericBuffer() : mSize(0), mCapacity(0), mItemSize(1), mBuffer(nullptr) {}
-  // GenericBuffer(const size_t item_size)
-  //     : mSize(0), mCapacity(0), mItemSize(item_size), mBuffer(nullptr) {}
 
-  //!
-  //! \brief Construct a buffer with the specified allocation size in bytes.
-  //!
-  // GenericBuffer(size_t size, nvinfer1::DataType type)
-  GenericBuffer(size_t size, size_t item_size)
-      : mSize(size), mItemSize(item_size), mCapacity(size) {
-    if (!allocFn(&mBuffer, this->nbBytes())) {
-      throw std::bad_alloc();
-    }
-  }
-
-  GenericBuffer(GenericBuffer&& buf)
-      : mSize(buf.mSize), mCapacity(buf.mCapacity), mItemSize(buf.mItemSize), mBuffer(buf.mBuffer) {
-    buf.mSize = 0;
-    buf.mCapacity = 0;
-    buf.mItemSize = 0;
-    buf.mBuffer = nullptr;
-  }
-
-  GenericBuffer& operator=(GenericBuffer&& buf) {
-    if (this != &buf) {
-      freeFn(mBuffer);
-      mSize = buf.mSize;
-      mCapacity = buf.mCapacity;
-      mItemSize = buf.mItemSize;
-      mBuffer = buf.mBuffer;
-      // Reset buf.
-      buf.mSize = 0;
-      buf.mCapacity = 0;
-      buf.mBuffer = nullptr;
-    }
-    return *this;
-  }
-
-  //!
-  //! \brief Returns pointer to underlying array.
-  //!
   void* data() { return mBuffer; }
 
-  //!
-  //! \brief Returns pointer to underlying array.
-  //!
   const void* data() const { return mBuffer; }
 
   //!
@@ -170,21 +68,37 @@ class GenericBuffer {
       }
       mCapacity = newSize;
     }
+    
   }
-
+  void resize(size_t c, size_t h, size_t w, size_t elem_size, size_t *pitch) {
+    auto vol_size = c * h * w;
+    if (mBuffer) {
+      freeFn(mBuffer);
+    }
+    if (!allocFn(&mBuffer, c, h, w, elem_size, pitch)) {
+        throw std::bad_alloc{};
+    }
+  }
   ~GenericBuffer() { freeFn(mBuffer); }
 
  private:
-  size_t mSize{0}, mCapacity{0};
+  size_t mSize{0};
+  size_t mCapacity{0};
   size_t mItemSize;
-  void* mBuffer;
+  void* mBuffer = nullptr;
   AllocFunc allocFn;
   FreeFunc freeFn;
+  // int mPitch;
 };
+
+// {
+
+// }
 
 class DeviceAllocator {
  public:
   bool operator()(void** ptr, size_t size) const { return cudaMalloc(ptr, size) == cudaSuccess; }
+  bool operator()(void** ptr, size_t c, size_t h, size_t w, size_t elem_size, size_t *pitch) const { return cudaMallocPitch(ptr, pitch, w * c * elem_size, h) == cudaSuccess; }
 };
 
 class DeviceFree {
@@ -223,12 +137,15 @@ enum BUFFER_TYPE : uint8_t
 { DEVICE, HOST };
 class BufferManager {
  public:
-  void initBuffer(const std::string& name, const size_t& size, bool host_buf = true);
+  void initBuffer(const std::string& name, const size_t& size, bool host_buf = true, uint8_t *data = nullptr);
+  void initBuffer2D(const std::string& name, size_t c, size_t h, size_t w, size_t elem_size, bool host_buf = true, uint8_t *data = nullptr);
   void* getBuffer(const std::string& name, BUFFER_TYPE buf_type);
   bool checkBufferExist(const std::string& name) { return mDeviceBuffer.count(name) > 0; };
-  size_t getBufferSize(const std::string& name);
+  // size_t getBufferSize(const std::string& name);
   void copyDeviceToHost(const std::string& name, const cudaStream_t& stream);
   void copyHostToDevice(const std::string& name, const cudaStream_t& stream);
+  nvinfer1::Dims getBuf2DDim(const std::string& name);
+  size_t getBuf2DPitch(const std::string& name);
   void releaseAllBuffers();
 
   static BufferManager& Instance() {
@@ -244,6 +161,10 @@ class BufferManager {
   std::map<std::string, DeviceBuffer> mDeviceBuffer;
   std::map<std::string, HostBuffer> mHostBuffer;
   std::map<std::string, size_t> mNumBytes;
+
+  std::map<std::string, nvinfer1::Dims> mBuf2DDims;
+  std::map<std::string, size_t> mBuf2DPitch;
+  std::set<std::string> mBuf2D;
 };
 
 }  // namespace nvocdr

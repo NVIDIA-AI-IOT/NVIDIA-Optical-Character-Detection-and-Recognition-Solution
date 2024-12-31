@@ -1,12 +1,15 @@
-#ifndef __NVOCDR_PYBIND_HEADER__
-#define __NVOCDR_PYBIND_HEADER__
+#pragma once
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include "nvOCDR.h"
 
+namespace nvocdr
+{
+    
 namespace py = pybind11;
-using namespace nvocdr;
+
 
 class nvOCDRWarp 
 {
@@ -18,8 +21,9 @@ public:
     std::vector<std::vector<std::pair<nvocdr::Polygon, std::pair<std::string, float>>>> warpPatchInfer(py::array_t<uchar> &oriImg, py::array_t<uchar> &imgPatches, const float overlapRate);
 
 private:
-    nvocdr::nvOCDR* m_nvOCDRLib;
+    std::unique_ptr<nvOCDR> mHandler;
 };
+} // namespace nvocdr
 
-#endif // __NVOCDR_PYBIND_HEADER__
+
 

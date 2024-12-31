@@ -15,8 +15,6 @@ namespace nvocdr {
 
 using namespace nvinfer1;
 
-size_t volume(const Dims& dim);
-
 struct InferDeleter {
   template <typename T>
   void operator()(T* obj) const {

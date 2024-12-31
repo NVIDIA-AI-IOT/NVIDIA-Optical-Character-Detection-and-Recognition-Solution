@@ -12,8 +12,11 @@ namespace nvocdr
     {
     public:
       OCDRInferenceSample() = default;
-      void initialize()
+      void initialize(int width, int height)
       {
+        mParam.input_shape[0] = 3;
+        mParam.input_shape[1] = height;
+        mParam.input_shape[2] = width;
         mHandler = nvOCDR_initialize(mParam);
       };
 
@@ -67,9 +70,6 @@ namespace nvocdr
       nvOCDROutput infer(const cv::Mat &img)
       {
         nvOCDRInput input{
-            .height = static_cast<size_t>(img.rows),
-            .width = static_cast<size_t>(img.cols),
-            .num_channel = static_cast<size_t>(img.channels()),
             .data = img.data,
             .data_format = DATAFORMAT_TYPE_HWC};
         nvOCDROutput output;
@@ -137,6 +137,8 @@ namespace nvocdr
           mParam.process_param.strategy = STRATEGY_TYPE_RESIZE_TILE;
         } else if (strategy == "noresize"){
           mParam.process_param.strategy = STRATEGY_TYPE_NORESIZE_TILE;
+        } else if (strategy == "resize_full") {
+          mParam.process_param.strategy = STRATEGY_TYPE_RESIZE_FULL;
         } else{
           std::cerr << "strategy not supported " <<  strategy <<"\n";
           return false;

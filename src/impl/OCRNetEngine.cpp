@@ -72,6 +72,7 @@ void OCRNetEngine::loadDict() {
     }
   }
 }
+
 void OCRNetEngine::decode(Text* const text, size_t idx) {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
     decodeCTC(text, idx);

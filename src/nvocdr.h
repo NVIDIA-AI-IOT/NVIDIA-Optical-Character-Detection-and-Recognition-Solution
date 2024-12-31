@@ -20,6 +20,7 @@ enum STRATEGY_TYPE {
   // no resize, just do tile
   STRATEGY_TYPE_NORESIZE_TILE,
   // STRATEGY_TYPE_RESIZE
+  STRATEGY_TYPE_RESIZE_FULL,
 };
 
 typedef struct {
@@ -55,6 +56,10 @@ typedef struct {
 } nvOCRParam;
 
 typedef struct {
+  //   size_t height;
+  // size_t width;
+  // size_t num_channel;
+  size_t input_shape[3] = {0, 0, 0}; // c, h, w
   // OCDNetEngine param
   nvOCDParam ocd_param;
   // OCRNet param:
@@ -64,12 +69,11 @@ typedef struct {
 } nvOCDRParam;
 
 typedef struct {
-  size_t height;
-  size_t width;
-  size_t num_channel;
   // input data is owned by user, user responsible for allocate and deallocated
-  void*
-      data;  // pointer to data in shape [batch_size, height, width, num_channel] or [batch_size, num_channel, height, width]
+  // pointer to data in shape [height, width, num_channel] or [num_channel, height, width]
+  // data order on channel should be B G R
+  // the buffer size equal to the input_shape set in nvOCDRParam
+  void* data;  
   DATAFORMAT_TYPE data_format = DATAFORMAT_TYPE_HWC;  // indicate data format in mem
 } nvOCDRInput;
 

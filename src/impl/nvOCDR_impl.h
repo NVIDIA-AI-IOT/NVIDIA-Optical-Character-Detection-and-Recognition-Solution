@@ -16,13 +16,28 @@
 namespace nvocdr {
 static constexpr float IMG_MEAN_GRAY = 127.5;
 static constexpr float IMG_SCALE_GRAY = 0.00784313;
-static constexpr float IMG_MEAN_B = 104.00698793;
-static constexpr float IMG_MEAN_G = 116.66876762;
-static constexpr float IMG_MEAN_R = 122.67891434;
+static constexpr float IMG_MEAN_B = 0.4078705409019608;
+static constexpr float IMG_MEAN_G = 0.4575245789019608;
+static constexpr float IMG_MEAN_R = 0.4810937817254902;
+
+static constexpr float IMG_MEAN_R_MIXNET = 0.485;
+static constexpr float IMG_MEAN_G_MIXNET = 0.456;
+static constexpr float IMG_MEAN_B_MIXNET = 0.406;
+
+static constexpr float IMG_MEAN_R_STD_MIXNET = 1 / 0.229;
+static constexpr float IMG_MEAN_G_STD_MIXNET = 1 / 0.224;
+static constexpr float IMG_MEAN_B_STD_MIXNET = 1 / 0.225;
+
+
 static constexpr float IMG_SCALE_BRG = 0.00392156;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;
 static constexpr size_t TIME_HISTORY_SIZE = 100;
+
+static constexpr size_t C_IDX = 0;
+static constexpr size_t H_IDX = 1;
+static constexpr size_t W_IDX = 2;
+
 
 class nvOCDR {
  public:
@@ -33,13 +48,17 @@ class nvOCDR {
   void process(const nvOCDRInput& input, nvOCDROutput* const output);
   void printTimeStat();
 
+  void testfunc(cv::Mat & input_image);
+
  private:
+  void initBuffers();
   void processTile(const nvOCDRInput& input);
 
   void handleStrategy(const nvOCDRInput& input);
 
   void getTilePlan(size_t input_w, size_t input_h, size_t raw_w, size_t raw_h, size_t stride);
   void preprocessOCDTile(size_t start, size_t end);
+  void preprocessOCDTileGPU(size_t start, size_t end);
   void postprocessOCDTile(size_t start, size_t end);
 
   void selectOCRCandidates();
@@ -47,6 +66,7 @@ class nvOCDR {
   void postprocessOCR(size_t start, size_t end);
 
   void preprocessInputImage();
+  void preprocessInputImageGPU();
   void restoreImage(const nvOCDRInput& input);
   void setOutput(nvOCDROutput* const output);
   cv::Mat denormalizeGray(const cv::Mat& input);
@@ -65,6 +85,8 @@ class nvOCDR {
 
   cv::Mat mInputGrayImage;  // input image, float32 and gray, size = mInputImage
 
+  std::vector<size_t> mOCRDirections;
+
   /** origin size, resized size */
   std::pair<cv::Size, cv::Size> mResizeInfo;
   std::vector<cv::Rect> mTiles;
@@ -74,11 +96,15 @@ class nvOCDR {
   std::vector<Text> mTexts;
   size_t mNumTexts;
 
+  std::array<size_t, 3> mInputShape; // c, h, w
+
   cudaStream_t mStream;
   nvOCDRParam mParam;
+  Timer<TIME_HISTORY_SIZE> mPreprocessTimer;
   Timer<TIME_HISTORY_SIZE> mOCDTimer;
   Timer<TIME_HISTORY_SIZE> mSelectProcessTimer;
   Timer<TIME_HISTORY_SIZE> mOCRTimer;
   Timer<TIME_HISTORY_SIZE> mE2ETimer;
+  Timer<TIME_HISTORY_SIZE> mTmpTimer;
 };
 }  // namespace nvocdr

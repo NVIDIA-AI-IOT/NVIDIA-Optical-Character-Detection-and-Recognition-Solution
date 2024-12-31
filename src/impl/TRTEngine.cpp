@@ -12,14 +12,6 @@
 using namespace nvinfer1;
 
 namespace nvocdr {
-inline size_t volume(const nvinfer1::Dims& dim) {
-  size_t data_size = 1;
-  for (size_t i = 0; i < dim.nbDims; i++) {
-    data_size *= dim.d[i];
-  }
-  return data_size;
-}
-
 class Logger : public ILogger {
   void log(Severity severity, const char* msg) noexcept override {
     // suppress info-level messages

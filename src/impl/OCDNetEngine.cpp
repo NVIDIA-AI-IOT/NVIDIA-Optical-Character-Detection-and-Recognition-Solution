@@ -3,6 +3,8 @@
 #include "glog/logging.h"
 
 #include "OCDNetEngine.h"
+#include "timer.hpp"
+
 namespace nvocdr {
 inline void correctQuad(QUADANGLE& quadangle) {
   // https://namkeenman.wordpress.com/2015/12/18/open-cv-determine-angle-of-rotatedrect-minarearect/
@@ -131,13 +133,16 @@ void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
                                                std::vector<QUADANGLE>* const quads,
                                                std::vector<Text>* const texts, size_t* num_text,
                                                const ProcessParam& process_param) {
+  Timer<100> timer;
+  timer.Start();
   std::vector<std::vector<cv::Point>> raw_contours;
   std::vector<cv::Vec4i> hierarchy;
   cv::findContours(~mask, raw_contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
 
-  cv::Mat viz(mask.size(), CV_8UC3, cv::Scalar(0, 0, 0));
-  cv::RNG rng(12345);
+//   cv::Mat viz(mask.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+//   cv::RNG rng(12345);
 
+  LOG(ERROR) << "find contours: " << timer;
   std::vector<size_t> connected_compoment;
   std::vector<std::vector<size_t>> group;
   for (size_t i = 0; i < hierarchy.size(); ++i) {
@@ -157,7 +162,7 @@ void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
   LOG(INFO) << "group: " << group.size();
 
   for (size_t i = 0; i < group.size(); ++i) {
-    cv::Scalar color(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+    // cv::Scalar color(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
     if (group[i].size() != 2) {
       continue;
     }
@@ -203,7 +208,7 @@ void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
       break;
     }
   }
-  cv::imwrite("hctnr.png", viz);
+//   cv::imwrite("hctnr.png", viz);
 }
 
 // float OCDNetEngine::contourScore(const Mat& binary, const vector<Point>& contour)

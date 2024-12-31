@@ -6,9 +6,11 @@ int main(int argc, char** argv) {
     if(!sample.parseArgs(argc, argv)) {
         return 1;
     };
-    sample.initialize();
-
+    
     cv::Mat origin_image = cv::imread(sample.getImagePath());
+
+    sample.initialize(origin_image.cols, origin_image.rows);
+
     // cv::Mat image;
     // cv::GaussianBlur(origin_image, image, cv::Size(0, 0), 3);
     // cv::addWeighted(origin_image, 2, image, -1, 0, image);

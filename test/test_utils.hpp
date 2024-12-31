@@ -73,6 +73,9 @@ class TestAssistant {
     if (img_case == TEST_IMG_CASE_SCENE_TEXT) {
       mTestImage = cv::imread(std::filesystem::path(mImageDir) / "scene_text.jpg");
       mGtPath = std::filesystem::path(mImageDir) / "scene_text.txt";
+      mParam.input_shape[0] = 3;
+      mParam.input_shape[1] = mTestImage.rows;
+      mParam.input_shape[2] = mTestImage.cols;
     } else {
     }
     if (model_combo == TEST_MODEL_COMBO_DCN_RES50) {
@@ -85,10 +88,7 @@ class TestAssistant {
   }
   nvOCDRParam getParam() { return mParam; }
   nvOCDRInput getInput() {
-    return {.height = static_cast<size_t>(mTestImage.rows),
-            .width = static_cast<size_t>(mTestImage.cols),
-            .num_channel = static_cast<size_t>(mTestImage.channels()),
-            .data = mTestImage.data,
+    return {.data = mTestImage.data,
             .data_format = DATAFORMAT_TYPE_HWC};
   }
 
@@ -120,7 +120,6 @@ class Metric {
 
     for (size_t i = 0; i < gts.size(); ++i) {
       float cur_gt_best_iou = 0;
-      int cur_gt_best_pred_idx = -1;
       const auto gt = getRect(gts[i]);
 
       for (size_t j = 0; j < preds.num_texts; ++j) {
@@ -143,7 +142,7 @@ class Metric {
         }
         if (iou > cur_gt_best_iou) {
           cur_gt_best_iou = iou;
-          cur_gt_best_pred_idx = j;
+          best_match_gt[i] = j;
         }
 
         if (iou > best_match_pred_iou[j]) {
@@ -151,7 +150,7 @@ class Metric {
           best_match_pred[j] = i;
         }
       }
-      best_match_gt[i] = cur_gt_best_pred_idx;
+      
     }
 
     float tp = 0;
