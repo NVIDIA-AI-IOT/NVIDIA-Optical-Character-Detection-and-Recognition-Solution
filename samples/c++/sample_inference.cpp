@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     // cv::GaussianBlur(origin_image, image, cv::Size(0, 0), 3);
     // cv::addWeighted(origin_image, 2, image, -1, 0, image);
     // cv::resize(image, image, {200,200});
-    // for(int i = 0;i < 10;++i)
+    for(int i = 0;i < 14;++i) {
         const auto output = sample.infer(origin_image);
     //     for (size_t i = 0; i < output.num_texts;++i) {
     //         std::cout<< std::string(output.texts[i].text) << ",";
@@ -25,8 +25,9 @@ int main(int argc, char** argv) {
     //         }
     //         std::cout<<"\n";
     //     }
-    auto const viz = sample.visualize(origin_image, output);
-    cv::imwrite("viz.png", viz);
+        auto const viz = sample.visualize(origin_image, output);
+        cv::imwrite("viz.png", viz);
+    }
     // cv::imwrite("slim_1.png", origin_image(cv::Rect(400, 0, 300, 3904)));
     // cv::imwrite("slim_2.png", origin_image(cv::Rect(0, 300, 3904, 300)));
 

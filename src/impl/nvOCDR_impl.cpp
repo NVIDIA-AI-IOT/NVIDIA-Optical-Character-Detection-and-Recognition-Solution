@@ -5,7 +5,6 @@
 #include <cstring>
 #include "nvocdr.h"
 #include <nppi.h>
-#include "kernel.h"
 namespace nvocdr {
 
 inline size_t getCnt(size_t input, size_t raw, size_t stride) {
@@ -18,7 +17,6 @@ inline size_t getCnt(size_t input, size_t raw, size_t stride) {
 
 void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
   mE2ETimer.Start();
-
   // restore image from buffer to cv::Mat, handle data order/channel
   restoreImage(input);
   // handle different strategy ,mResizeInfo will be set
@@ -39,8 +37,8 @@ void nvOCDR::restoreImage(const nvOCDRInput& input) {
   if (input.data_format == DATAFORMAT_TYPE_HWC) {
     mInputImage = cv::Mat(cv::Size(mInputShape[W_IDX], mInputShape[H_IDX]), CV_8UC3,
                           input.data, cv::Mat::AUTO_STEP);
-    
     memcpy(mBufManager.getBuffer("input_image", HOST), mInputImage.data, mInputImage.total() * mInputImage.elemSize());
+    mBufManager.copyHostToDevice("input_image", mStream); 
 
   } else {
     // todo(shuohanc) restore from chw.
@@ -142,61 +140,68 @@ void nvOCDR::setOutput(nvOCDROutput* const output) {
 
 void nvOCDR::initBuffers() {
   mBufManager.initBuffer("input_image", mInputShape[C_IDX] * mInputShape[H_IDX] * mInputShape[W_IDX], true);  // 8UC3, origin size
-  // mBufManager.initBuffer2D("input_image_resized", 3, mResizeInfo.second.height, mResizeInfo.second.width, 1, false); // 
-  // mBufManager.initBuffer2D("input_image_resized_32f", 3, mResizeInfo.second.height, mResizeInfo.second.width, 4, false);
-  // mBufManager.initBuffer2D("input_image_resized_normalized", 3, mResizeInfo.second.height, mResizeInfo.second.width, 4, false);
+  mBufManager.initBuffer("input_gray", mInputShape[W_IDX] * mInputShape[H_IDX] * sizeof(float), true);  // 32FC1, origin size
 }
 
-void nvOCDR::preprocessInputImageGPU() {
-  // mTmpTimer.Start();
-  // NPPUtil::Resize_8UC3("input_image", "input_image_resized", mStream);
-  // NPPUtil::Resize_8UC3("input_image", "input_image_resized", mStream);
-  // mBufManager.getBuffer("input_image", DEVICE);
-  mBufManager.copyHostToDevice("input_image", mStream);
+// void nvOCDR::preprocessInputImageGPU() {
+//   mTmpTimer.Start();
+//   // NPPUtil::Resize_8UC3("input_image", "input_image_resized", mStream);
+//   // NPPUtil::Resize_8UC3("input_image", "input_image_resized", mStream);
+//   mBufManager.getBuffer("input_image", DEVICE);
+//   mBufManager.copyHostToDevice("input_image", mStream);
 
-  auto const &src_size = mResizeInfo.first;
-  auto const &dst_size = mResizeInfo.second;
+//   auto const &src_size = mResizeInfo.first;
+//   auto const &dst_size = mResizeInfo.second;
 
-  size_t channel_num = 640 * 640;
-  mBufManager.initBuffer("test_input",  channel_num * 3 * 4 * sizeof(float), true);
+//   size_t p_size = mTiles[0].size().width;
 
-
-
-  cv::Size2f scale(static_cast<float>(src_size.width) / dst_size.width,  static_cast<float>(src_size.height) / dst_size.height);
-  LOG(ERROR) << "launch preprocess kernel";
+//   size_t channel_num = p_size * p_size;
+//   mBufManager.initBuffer("test_input",  channel_num * 3 * mTiles.size() * sizeof(float), true);
 
 
 
+//   cv::Size2f scale(static_cast<float>(src_size.width) / dst_size.width,  static_cast<float>(src_size.height) / dst_size.height);
+//   LOG(ERROR) << "launch preprocess kernel";
 
 
-  for(size_t i = 0; i < mTiles.size(); i ++) {
-      nvocdr::launch_preprocess(mBufManager.getBuffer("input_image", DEVICE), 
-                            static_cast<float*>(mBufManager.getBuffer("test_input", DEVICE)) + channel_num * i * 3, 
-                            mInputShape[W_IDX], mInputShape[H_IDX], mTiles[i], scale,
-                            255.F, IMG_MEAN_R, IMG_MEAN_G, IMG_MEAN_B, 1, 1, 1,
-                            true, true, 
-                            mStream);
 
-  }
-    mBufManager.copyDeviceToHost("test_input", mStream);
-    cudaStreamSynchronize(mStream);
-    auto * buf = (float*)mBufManager.getBuffer("test_input", HOST);
 
-  for(size_t i = 0; i < mTiles.size(); i ++) {
 
-    cv::Mat r(640, 640, CV_32F, buf + channel_num * 3 * i);
-    cv::Mat g(640, 640, CV_32F, buf + channel_num + channel_num * 3 * i);
-    cv::Mat b(640, 640, CV_32F, buf + channel_num * 2 + channel_num * 3 * i);
+//   for(size_t i = 0; i < mTiles.size(); i ++) {
+//       nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)), 
+//                             static_cast<float*>(mBufManager.getBuffer("test_input", DEVICE)) + channel_num * i * 3, 
+//                             mInputShape[W_IDX], mInputShape[H_IDX], mTiles[i], scale,
+//                             OCD_NORMAL_PREPROR_PARAM,
+//                             true, true, 
+//                             mStream);
 
-    cv::Mat merged;
-    cv::merge(std::vector<cv::Mat>{r,g,b}, merged);
-    merged += cv::Scalar(IMG_MEAN_B, IMG_MEAN_G, IMG_MEAN_R);
-    merged = merged * 255;
+//   }
+//   mBufManager.copyDeviceToHost("test_input", mStream);
+//   cudaStreamSynchronize(mStream);
+//   auto * buf = (float*)mBufManager.getBuffer("test_input", HOST);
+//   // LOG(INFO) << channel_num;
 
-    cv::imwrite(std::to_string(i) + ".png", merged);
-    // break;
-  }
-}
+//   // LOG(INFO) << *buf  << " " << buf[channel_num] << " " << buf[channel_num * 2];
+
+//   // LOG(INFO) << mInputImage.at<cv::Vec3b>(0, 0);
+//   // LOG(INFO) << mInputImage.at<cv::Vec3b>(1, 0);
+//   // LOG(INFO) << mInputImage.at<cv::Vec3b>(1, 1);
+//   // LOG(INFO) << mInputImage.at<cv::Vec3b>(0, 1);
+//   for(size_t i = 0; i < mTiles.size() ; i ++) {
+
+//     cv::Mat b(p_size, p_size, CV_32F, buf + channel_num * 3 * i);
+//     cv::Mat g(p_size, p_size, CV_32F, buf + channel_num + channel_num * 3 * i);
+//     cv::Mat r(p_size, p_size, CV_32F, buf + channel_num * 2 + channel_num * 3 * i);
+
+//     cv::Mat merged;
+//     cv::merge(std::vector<cv::Mat>{b,g,r}, merged);
+//     merged += cv::Scalar(IMG_MEAN_B, IMG_MEAN_G, IMG_MEAN_R);
+//     merged = merged * 255;
+
+//     cv::imwrite(std::to_string(i) + ".png", merged);
+//     // break;
+//   }
+// }
 
 void nvOCDR::preprocessInputImage() {
 
@@ -208,30 +213,47 @@ void nvOCDR::preprocessInputImage() {
     LOG(INFO) << "resize: " << mResizeInfo.first << " --> " << mResizeInfo.second;
   }
 
-  cv::resize(mInputImage, mInputImageResized, mResizeInfo.second);
+  // cv::resize(mInputImage, mInputImageResized, mResizeInfo.second);
   // mInputImageResized = mInputImage.clone();
-  LOG(ERROR) << mInputImageResized.size();
+  // LOG(ERROR) << mInputImageResized.size();
 
   // resize image to destinate size
   mOCDScoreMap = cv::Mat(mResizeInfo.second, CV_32F, cv::Scalar(0.F));
   mOCDValidCntMap = cv::Mat(mResizeInfo.second, CV_32F, cv::Scalar(0.F));
 
   // ocd input preprocess, bgr normalize
-  mInputImageResized.convertTo(mInputImageResized32F, CV_32FC3);
-  if (mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
-    mInputImageResized32F = mInputImageResized32F / 255.F;
-    mInputImageResized32F -= cv::Scalar(IMG_MEAN_B_MIXNET, IMG_MEAN_G_MIXNET, IMG_MEAN_R_MIXNET);
-    mInputImageResized32F = mInputImageResized32F.mul(cv::Scalar(IMG_MEAN_B_STD_MIXNET, IMG_MEAN_G_STD_MIXNET, IMG_MEAN_R_STD_MIXNET));
-  } else {
-    mInputImageResized32F -= cv::Scalar(IMG_MEAN_B, IMG_MEAN_G, IMG_MEAN_R);
-    mInputImageResized32F = mInputImageResized32F.mul(cv::Scalar(IMG_SCALE_BRG, IMG_SCALE_BRG, IMG_SCALE_BRG));
-  }
+  // mInputImageResized.convertTo(mInputImageResized32F, CV_32FC3);
+  // if (mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
+  //   mInputImageResized32F = mInputImageResized32F / 255.F;
+  //   mInputImageResized32F -= cv::Scalar(IMG_MEAN_B_MIXNET, IMG_MEAN_G_MIXNET, IMG_MEAN_R_MIXNET);
+  //   mInputImageResized32F = mInputImageResized32F.mul(cv::Scalar(IMG_MEAN_B_STD_MIXNET, IMG_MEAN_G_STD_MIXNET, IMG_MEAN_R_STD_MIXNET));
+  // } else {
+  //   mInputImageResized32F -= cv::Scalar(IMG_MEAN_B, IMG_MEAN_G, IMG_MEAN_R);
+  //   mInputImageResized32F = mInputImageResized32F.mul(cv::Scalar(IMG_SCALE_BRG, IMG_SCALE_BRG, IMG_SCALE_BRG));
+  // }
 
-  // ocr input preprocess, gray normalize
-  cv::cvtColor(mInputImage, mInputGrayImage, cv::COLOR_BGR2GRAY);
-  mInputGrayImage.convertTo(mInputGrayImage, CV_32F);
-  mInputGrayImage -= IMG_MEAN_GRAY;
-  mInputGrayImage = mInputGrayImage.mul(IMG_SCALE_GRAY);
+  launch_preprocess_gray(
+    static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
+    static_cast<float*>(mBufManager.getBuffer("input_gray", DEVICE)),
+    mResizeInfo.first.width, mResizeInfo.first.height, 
+    mResizeInfo.first.width, mResizeInfo.first.height, OCR_PREPROC_PARAM, true, mStream
+  );
+  mInputGrayImage = cv::Mat(mResizeInfo.first.height, mResizeInfo.first.width, CV_32F, 
+    static_cast<float*>(mBufManager.getBuffer("input_gray", HOST))
+  );
+  mBufManager.copyDeviceToHost("input_gray", mStream);
+
+  // cudaStreamSynchronize(mStream);
+  // float* a = static_cast<float*>(mBufManager.getBuffer("input_gray", HOST));
+  // cv::Mat gray(mResizeInfo.first.height, mResizeInfo.first.width, CV_32F, a);
+  // cv::imwrite("gray.png", denormalizeGray(gray));
+
+
+  // // ocr input preprocess, gray normalize
+  // cv::cvtColor(mInputImage, mInputGrayImage, cv::COLOR_BGR2GRAY);
+  // mInputGrayImage.convertTo(mInputGrayImage, CV_32F);
+  // mInputGrayImage -= IMG_MEAN_GRAY;
+  // mInputGrayImage = mInputGrayImage.mul(IMG_SCALE_GRAY);
   LOG(INFO) << "preprocess image time: " << mPreprocessTimer;
 };
 
@@ -240,10 +262,9 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
   const auto ocd_input_w = mOCDNet->getInputW();
 
   // parameterize stride ??
-  getTilePlan(ocd_input_w, ocd_input_h, mInputImageResized.cols, mInputImageResized.rows,
+  getTilePlan(ocd_input_w, ocd_input_h, mResizeInfo.second.width, mResizeInfo.second.height,
               static_cast<size_t>(ocd_input_h * 0.95));
-  // preprocessInputImageGPU();
-
+  
   size_t num_tiles = mTiles.size();
   size_t num_ocd_bs = mOCDNet->getBatchSize();
   size_t num_ocd_runs =
@@ -251,31 +272,26 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
   LOG(INFO) << "tiles: " << num_tiles << ", run ocd " << num_ocd_runs << " times with batch size "
             << num_ocd_bs;
 
+  mOCDTimer.Start();
+
   // 1. ocd process
   for (size_t i = 0; i < num_ocd_runs; i++) {
     size_t start_idx = i * num_ocd_bs;
     size_t end_idx = std::min((i + 1) * num_ocd_bs, num_tiles);
     auto t = std::chrono::high_resolution_clock::now();
-    preprocessOCDTile(start_idx, end_idx);  // batch inference
-    // preprocessOCDTileGPU(start_idx, end_idx);
+    // preprocessOCDTile(start_idx, end_idx);  // batch inference
+    preprocessOCDTileGPU(start_idx, end_idx);
     // cudaStreamSynchronize(mStream);
-    mOCDTimer.Start();
-    mOCDNet->syncMemory(true, true, mStream);
+    // mOCDNet->syncMemory(true, true, mStream);
     mOCDNet->infer();
     mOCDNet->syncMemory(false, false, mStream);
     cudaStreamSynchronize(mStream);
-    mOCDTimer.Stop();
     postprocessOCDTile(start_idx, end_idx);  // restore to image
-
-    cv::inRange(mOCDScoreMap, mParam.process_param.binarize_lower_threshold,
-                mParam.process_param.binarize_upper_threshold, mOCDOutputMask);
-
-    mOCDOutputMask = ~mOCDOutputMask;
-    // restore mask to origin size
-    // LOG(INFO) << mOCDOutputMask.size();
-    cv::resize(mOCDOutputMask, mOCDOutputMask, mResizeInfo.first);
   }
-  LOG_IF(INFO, mParam.process_param.debug_log) << "ocd process time: " << mOCDTimer.getMean();
+  cv::inRange(mOCDScoreMap, mParam.process_param.binarize_lower_threshold,
+              mParam.process_param.binarize_upper_threshold, mOCDOutputMask);
+  cv::resize(~mOCDOutputMask, mOCDOutputMask, mResizeInfo.first);
+  LOG(INFO) << "ocd process time: " << mOCDTimer;
 
   // 2. select and filter the proper text area candidates
   mSelectProcessTimer.Start();
@@ -337,17 +353,17 @@ void nvOCDR::preprocessOCDTileGPU(size_t start, size_t end) {
   for (size_t j = start; j < end; j++) {
      const auto& tile = mTiles[j];
      if(mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
-       nvocdr::launch_preprocess(mBufManager.getBuffer("input_image", DEVICE),
-                                 static_cast<float*>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), DEVICE)) + j * output_h * output_w * 3 , 
+       nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
+                                 static_cast<float*>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), DEVICE)) + (j - start) * output_h * output_w * 3 , 
                                  mInputShape[W_IDX], mInputShape[H_IDX], tile, scale,
-                                 255.F, IMG_MEAN_R, IMG_MEAN_G, IMG_MEAN_B, 1, 1, 1,
+                                OCD_NORMAL_PREPROR_PARAM,
                                  true, true, 
                             mStream);
-     } else {
-      nvocdr::launch_preprocess(mBufManager.getBuffer("input_image", DEVICE),
-                          static_cast<float*>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), DEVICE)) + j *output_h * output_w , 
+     } else if(mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET){
+      nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
+                          static_cast<float*>(mBufManager.getBuffer(mOCDNet->getBufName(OCDNET_INPUT), DEVICE)) + (j - start) * output_h * output_w * 3, 
                     mInputShape[W_IDX], mInputShape[H_IDX], tile, scale,
-                    255.F, IMG_MEAN_R_MIXNET, IMG_MEAN_G_MIXNET, IMG_MEAN_B_MIXNET, IMG_MEAN_R_STD_MIXNET, IMG_MEAN_G_STD_MIXNET, IMG_MEAN_B_STD_MIXNET,
+                    OCD_MIXNET_PREPROR_PARAM,
                     true, false, 
                     mStream);
      }
@@ -447,7 +463,7 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
     buf += ocr_input_h * ocr_input_w;
 
     // for debug
-    if (mParam.process_param.debug_log) {
+    if (mParam.process_param.debug_image) {
       cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
                   denormalizeGray(text_roi));
     }
@@ -457,10 +473,8 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
 cv::Mat nvOCDR::denormalizeGray(const cv::Mat& input) {
   cv::Mat ret;
   input.copyTo(ret);
-  static cv::Scalar GRAY_MEAN(IMG_MEAN_GRAY);
-  static cv::Scalar GRAY_SCALE(IMG_SCALE_GRAY);
-  ret /= GRAY_SCALE;
-  ret += GRAY_MEAN;
+  ret /= IMG_SCALE_GRAY;
+  ret += IMG_MEAN_GRAY;
   return ret;
 }
 
@@ -473,6 +487,7 @@ void nvOCDR::postprocessOCR(size_t start, size_t end) {
 
 nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
   // todo(shuohanc) check param
+  cudaStreamCreate(&mStream);
 
   memcpy(mInputShape.data(), param.input_shape, mInputShape.size() * sizeof(size_t));
 
@@ -481,7 +496,6 @@ nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
   initBuffers();
   mTexts.resize(param.process_param.max_candidate);
   mQuadPts.resize(param.process_param.max_candidate);
-  cudaStreamCreate(&mStream);
 
   LOG(INFO) << "================= init ocr =================";
   mOCRNet = std::make_unique<OCRNetEngine>(OCR_PREFIX, param.ocr_param);

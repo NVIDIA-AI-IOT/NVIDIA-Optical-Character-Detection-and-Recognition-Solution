@@ -27,6 +27,9 @@ public:
   }
   inline float getMean() {
 
+    if (mHistory.empty()){
+        return 0;
+    }
     auto mean = std::accumulate(mHistory.begin(), mHistory.end(), std::chrono::milliseconds(0)) / mHistory.size();
     return mean.count();
   }

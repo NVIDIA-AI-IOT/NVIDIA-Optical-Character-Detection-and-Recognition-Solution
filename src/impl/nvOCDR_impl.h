@@ -1,17 +1,20 @@
 #pragma once
-#include <cuda.h>
-#include <cuda_runtime.h>
+
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <opencv2/opencv.hpp>
+
 #include "MemManager.h"
 #include "OCDNetEngine.h"
 #include "OCRNetEngine.h"
 #include "nvocdr.h"
-#include "opencv2/opencv.hpp"
 #include "timer.hpp"
+#include "kernel.h"
 
 namespace nvocdr {
 static constexpr float IMG_MEAN_GRAY = 127.5;
@@ -27,8 +30,6 @@ static constexpr float IMG_MEAN_B_MIXNET = 0.406;
 static constexpr float IMG_MEAN_R_STD_MIXNET = 1 / 0.229;
 static constexpr float IMG_MEAN_G_STD_MIXNET = 1 / 0.224;
 static constexpr float IMG_MEAN_B_STD_MIXNET = 1 / 0.225;
-
-
 static constexpr float IMG_SCALE_BRG = 0.00392156;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;
@@ -37,6 +38,31 @@ static constexpr size_t TIME_HISTORY_SIZE = 100;
 static constexpr size_t C_IDX = 0;
 static constexpr size_t H_IDX = 1;
 static constexpr size_t W_IDX = 2;
+
+static constexpr COLOR_PREPROC_PARAM OCD_NORMAL_PREPROR_PARAM {
+    .rgb_scale = 255.F,
+    .r_mean = IMG_MEAN_B,
+    .g_mean = IMG_MEAN_G,
+    .b_mean = IMG_MEAN_R,
+    .r_std = 1,
+    .g_std = 1,
+    .b_std = 1
+};
+
+static constexpr COLOR_PREPROC_PARAM OCD_MIXNET_PREPROR_PARAM {
+    .rgb_scale = 255.F,
+    .r_mean = IMG_MEAN_R_MIXNET,
+    .g_mean = IMG_MEAN_G_MIXNET,
+    .b_mean = IMG_MEAN_B_MIXNET,
+    .r_std = IMG_MEAN_R_STD_MIXNET,
+    .g_std = IMG_MEAN_G_STD_MIXNET,
+    .b_std = IMG_MEAN_B_STD_MIXNET
+};
+
+static constexpr GRAY_PREPROC_PARAM OCR_PREPROC_PARAM {
+  .gray_scale = IMG_SCALE_GRAY,
+  .mean = IMG_MEAN_GRAY
+};
 
 
 class nvOCDR {
@@ -66,7 +92,6 @@ class nvOCDR {
   void postprocessOCR(size_t start, size_t end);
 
   void preprocessInputImage();
-  void preprocessInputImageGPU();
   void restoreImage(const nvOCDRInput& input);
   void setOutput(nvOCDROutput* const output);
   cv::Mat denormalizeGray(const cv::Mat& input);
