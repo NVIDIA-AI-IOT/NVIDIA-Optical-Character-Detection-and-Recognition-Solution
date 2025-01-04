@@ -27,9 +27,9 @@ static constexpr float IMG_MEAN_R_MIXNET = 0.485;
 static constexpr float IMG_MEAN_G_MIXNET = 0.456;
 static constexpr float IMG_MEAN_B_MIXNET = 0.406;
 
-static constexpr float IMG_MEAN_R_STD_MIXNET = 1 / 0.229;
-static constexpr float IMG_MEAN_G_STD_MIXNET = 1 / 0.224;
-static constexpr float IMG_MEAN_B_STD_MIXNET = 1 / 0.225;
+static constexpr float IMG_MEAN_R_STD_MIXNET = 0.229;
+static constexpr float IMG_MEAN_G_STD_MIXNET = 0.224;
+static constexpr float IMG_MEAN_B_STD_MIXNET = 0.225;
 static constexpr float IMG_SCALE_BRG = 0.00392156;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;

@@ -151,6 +151,7 @@ bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream
       mBufManager.copyDeviceToHost(getBufName(name), stream);
     }
   }
+  return true;
 }
 template <typename Param>
 nvinfer1::Dims TRTEngine<Param>::getOutputDims(const std::string& name) {

@@ -28,6 +28,8 @@ void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
   // set the output
   setOutput(output);
 
+  // LOG(INFO) << "tmp timer: " << mTmpTimer.get();
+
   // wall time of processing
   mE2ETimer.Stop();
 }
@@ -310,6 +312,7 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
   for (size_t i = 0; i < num_ocr_runs; ++i) {
     size_t start_idx = i * num_ocr_bs;
     size_t end_idx = std::min((i + 1) * num_ocr_bs, mNumTexts);
+    // recog on all specified directions
     for (auto const& bl_idx : mOCRDirections) {
       preprocessOCR(start_idx, end_idx, bl_idx);
 
@@ -367,7 +370,6 @@ void nvOCDR::preprocessOCDTileGPU(size_t start, size_t end) {
                     true, false, 
                     mStream);
      }
-
   }
 }
 
@@ -403,7 +405,6 @@ void nvOCDR::preprocessOCDTile(size_t start, size_t end) {
     cv::split(ocd_batch, dummy_channels);
     buf += 3 * ocd_input_h * ocd_input_w;
   }
-
 }
 
 void nvOCDR::selectOCRCandidates() {
@@ -440,7 +441,7 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
 
     // compute perspective transform
     cv::Mat h = cv::findHomography(transform_src, transform_dst);
-    cv::Mat text_roi(ocr_input_h, ocr_input_w, CV_32F, buf);
+    cv::Mat text_roi(ocr_input_h, ocr_input_w, CV_32F, buf + ocr_input_h * ocr_input_w * (i - start));
 
     if ((rect & cv::Rect(0, 0, mInputGrayImage.cols, mInputGrayImage.rows)) ==
         rect) {  // rect not image
@@ -454,19 +455,14 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
       continue;
       LOG(WARNING) << "ignore text out side ";
     }
-
-    const auto start_t = std::chrono::high_resolution_clock::now();
-
+    mTmpTimer.Start();
     cv::warpPerspective(mInputGrayImage(rect), text_roi, h, cv::Size(ocr_input_w, ocr_input_h));
-    const auto end_t = std::chrono::high_resolution_clock::now();
-
-    buf += ocr_input_h * ocr_input_w;
-
-    // for debug
-    if (mParam.process_param.debug_image) {
-      cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
-                  denormalizeGray(text_roi));
-    }
+    mTmpTimer.Stop();
+    // // for debug
+    // if (mParam.process_param.debug_image) {
+    //   cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
+    //               denormalizeGray(text_roi));
+    // }
   }
 }
 

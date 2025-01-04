@@ -29,7 +29,7 @@ typedef struct {
   float polygon_threshold = 0.3F;
   float binarize_lower_threshold = 0.F;
   float binarize_upper_threshold = 0.1F;
-  float min_pixel_area = 10;
+  float min_pixel_area = 100;
   bool debug_log = false;
   bool debug_image = false;
   // if true, 4 direction will be detected, otherwise only one, will consume more time

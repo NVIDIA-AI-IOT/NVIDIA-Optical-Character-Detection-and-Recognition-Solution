@@ -41,5 +41,6 @@ class OCDNetEngine : public OCDTRTEngine {
   std::string mOutputName;
   // todo (shuohanc) put in attri temporarily, to save mem alloc/dealloc
   std::vector<std::vector<cv::Point>> mTextCntrCandidates;
+
 };
 }  // namespace nvocdr
