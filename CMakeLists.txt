@@ -31,7 +31,7 @@ else()
 endif()
 
 add_subdirectory(src)
-add_subdirectory(py_bind)
+add_subdirectory(pybind)
 
 if(BUILD_SAMPLES)
   add_subdirectory(samples)
