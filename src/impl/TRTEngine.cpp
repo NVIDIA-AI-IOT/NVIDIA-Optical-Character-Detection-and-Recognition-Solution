@@ -20,16 +20,16 @@ class Logger : public ILogger {
   }
 } logger;
 
-template <typename Param>
-bool TRTEngine<Param>::init() {
-  initEngine();
-  customInit();
-  postInit();
-  return true;
-}
+// template <typename Param>
+// bool TRTEngine<Param>::init() {
+//   initEngine();
+//   customInit();
+//   postInit();
+//   return true;
+// }
 
-template <typename Param>
-bool TRTEngine<Param>::postInit() {
+
+bool TRTEngine::postInit() {
   for (auto const& name : mOutputNames) {
     if (!mBufManager.checkBufferExist(getBufName(name))) {
       LOG(WARNING) << "buffer for '" << name << "' not allocated, allocate to max";
@@ -39,16 +39,16 @@ bool TRTEngine<Param>::postInit() {
   return true;
 }
 
-template <typename Param>
-bool TRTEngine<Param>::initEngine() {
+
+bool TRTEngine::initEngine() {
 
   initLibNvInferPlugins(reinterpret_cast<void*>(&logger), "");
   mRuntime = std::move(TRTUniquePtr<IRuntime>(createInferRuntime(logger)));
   //load binary engine:
-  LOG(INFO) << "load engine from:" << mParam.model_file;
-  std::ifstream engineFile(mParam.model_file, std::ios::binary);
+  LOG(INFO) << "load engine from:" << mModelPath;
+  std::ifstream engineFile(mModelPath, std::ios::binary);
   if (!engineFile.good()) {
-    LOG(ERROR) << "Error reading serialized TensorRT engine: " << mParam.model_file;
+    LOG(ERROR) << "Error reading serialized TensorRT engine: " << mModelPath;
   }
   engineFile.seekg(0, std::ifstream::end);
   const int64_t fsize = engineFile.tellg();
@@ -57,7 +57,7 @@ bool TRTEngine<Param>::initEngine() {
   std::vector<char> engineBlob(fsize);
   engineFile.read(engineBlob.data(), fsize);
   if (!engineFile.good()) {
-    LOG(INFO) << "Error reading serialized TensorRT engine: " << mParam.model_file;
+    LOG(INFO) << "Error reading serialized TensorRT engine: " << mModelPath;
     throw std::runtime_error("Error reading serialized TensorRT engine");
   }
 
@@ -78,14 +78,14 @@ bool TRTEngine<Param>::initEngine() {
     }
   }
 
-  if (mParam.batch_size == 0) {
+  if (mBatchSize == 0) {
     mBatchSize = engine_max_batch_size;
   }
   return true;
 }
 
-template <typename Param>
-void TRTEngine<Param>::setupInput(const std::string& input_name, const Dims& dims, bool host_buf) {
+
+void TRTEngine::setupInput(const std::string& input_name, const Dims& dims, bool host_buf) {
   // final shape = opt shape
   const std::string name = input_name.empty() ? mInputNames[0] : input_name;
   LOG(INFO) << "-------- setup input for name: " << name << "--------";
@@ -110,8 +110,8 @@ void TRTEngine<Param>::setupInput(const std::string& input_name, const Dims& dim
                              mBufManager.getBuffer(getBufName(name), BUFFER_TYPE::DEVICE));
 }
 
-template <typename Param>
-void TRTEngine<Param>::setupOutput(const std::string& output_name, const Dims& dims,
+
+void TRTEngine::setupOutput(const std::string& output_name, const Dims& dims,
                                    bool host_buf) {
   // final shape = opt shape
   mOutputNames.push_back(output_name);
@@ -134,8 +134,8 @@ void TRTEngine<Param>::setupOutput(const std::string& output_name, const Dims& d
                              mBufManager.getBuffer(getBufName(output_name), BUFFER_TYPE::DEVICE));
 }
 
-template <typename Param>
-bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream_t& stream) {
+
+bool TRTEngine::syncMemory(bool input, bool host2device, const cudaStream_t& stream) {
   std::vector<std::string>* names = nullptr;
   if (input) {
     names = &mInputNames;
@@ -147,14 +147,13 @@ bool TRTEngine<Param>::syncMemory(bool input, bool host2device, const cudaStream
     if (host2device) {  // host2device
       mBufManager.copyHostToDevice(getBufName(name), stream);
     } else {  // device2host
-              //   std::cout<<"device to host " << name ;
       mBufManager.copyDeviceToHost(getBufName(name), stream);
     }
   }
   return true;
 }
-template <typename Param>
-nvinfer1::Dims TRTEngine<Param>::getOutputDims(const std::string& name) {
+
+nvinfer1::Dims TRTEngine::getOutputDims(const std::string& name) {
   if (mOutputDims.count(name) > 0) {
     return mOutputDims[name];
   } else {
@@ -162,15 +161,23 @@ nvinfer1::Dims TRTEngine<Param>::getOutputDims(const std::string& name) {
   }
 }
 
-template <typename Param>
-bool TRTEngine<Param>::infer(const cudaStream_t& stream) {
+
+nvinfer1::Dims TRTEngine::getInputDims(const std::string& name) {
+  if (mInputDims.count(name) > 0) {
+    return mInputDims[name];
+  } else {
+    throw std::runtime_error("not input name: " + name);
+  }
+}
+
+
+
+bool TRTEngine::infer(const cudaStream_t& stream) {
   if (!mContext->enqueueV3(stream)) {
     LOG(ERROR) << "enqueue failed!";
   };
+  syncMemory(false, false, stream);
   return true;
 }
-
-template class TRTEngine<nvOCRParam>;
-template class TRTEngine<nvOCDParam>;
 
 }  // namespace nvocdr

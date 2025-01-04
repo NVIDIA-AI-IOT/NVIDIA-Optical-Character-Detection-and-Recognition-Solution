@@ -34,15 +34,18 @@ inline std::ostream& operator<<(std::ostream& o, const Dims& dims) {
 template <typename T>
 using TRTUniquePtr = std::unique_ptr<T, InferDeleter>;
 
-template <typename Param>
+// template <typename Param>
 class TRTEngine {
  public:
   
-  TRTEngine(const char name[], const Param& param) : mName(name), mParam(param) {};
+  TRTEngine(const char name[], const std::string& model_file, 
+            size_t batch_size) : mName(name), mModelPath(model_file), mBatchSize(batch_size) {
+    
+  };
 
-  bool init();
+  // bool init();
   bool initEngine();
-  virtual bool customInit() = 0;
+  // virtual bool customInit() = 0;
   bool postInit();
 
   // Do TRT-based inference with processed input and get output
@@ -50,19 +53,19 @@ class TRTEngine {
   bool syncMemory(bool input, bool host2device, const cudaStream_t& stream);
 
   inline std::string getBufName(const std::string& name) { return mName + "_" + name; }
-  inline size_t getInputH() { return mInputH; };
-  inline size_t getInputW() { return mInputW; };
   inline size_t getBatchSize() { return mBatchSize; }
   nvinfer1::Dims getOutputDims(const std::string& name);
+  nvinfer1::Dims getInputDims(const std::string& name);
 
- protected:
+//  protected:
   void setupInput(const std::string& input_name, const Dims& dims, bool host_buf = false);
   void setupOutput(const std::string& output_name, const Dims& dims, bool host_buf = false);
   ~TRTEngine() = default;
 
 
-  Param mParam;
+  // Param mParam;
   std::string mName;
+  std::string mModelPath;
   BufferManager& mBufManager = BufferManager::Instance();
 
  private:
@@ -80,7 +83,7 @@ class TRTEngine {
   std::map<std::string, nvinfer1::Dims> mOutputDims;
 };
 
-using OCRTRTEngine = TRTEngine<nvOCRParam>;
-using OCDTRTEngine = TRTEngine<nvOCDParam>;
+// using OCRTRTEngine = TRTEngine<nvOCRParam>;
+// using OCDTRTEngine = TRTEngine<nvOCDParam>;
 
 }  // namespace nvocdr

@@ -10,8 +10,10 @@
 #include <opencv2/opencv.hpp>
 
 #include "MemManager.h"
-#include "OCDNetEngine.h"
-#include "OCRNetEngine.h"
+// #include "OCDNetEngine.h"
+// #include "OCRNetEngine.h"
+#include "OCRProcessor.h"
+#include "OCDProcessor.h"
 #include "nvocdr.h"
 #include "timer.hpp"
 #include "kernel.h"
@@ -96,8 +98,11 @@ class nvOCDR {
   void setOutput(nvOCDROutput* const output);
   cv::Mat denormalizeGray(const cv::Mat& input);
 
-  std::unique_ptr<OCRNetEngine> mOCRNet;
-  std::unique_ptr<OCDNetEngine> mOCDNet;
+  // std::unique_ptr<OCRNetEngine> mOCRNet;
+  // std::unique_ptr<OCDNetEngine> mOCDNet;
+  std::unique_ptr<OCRProcessor> mOCRProcessor;
+  std::unique_ptr<OCDProcessor> mOCDProcessor;
+
   BufferManager& mBufManager = BufferManager::Instance();
 
   cv::Mat mInputImage;         // origin input image, aribitrial size
@@ -120,6 +125,8 @@ class nvOCDR {
 
   std::vector<Text> mTexts;
   size_t mNumTexts;
+  cv::Size mOCDInputSize;
+  cv::Size mOCRInputSize;
 
   std::array<size_t, 3> mInputShape; // c, h, w
 

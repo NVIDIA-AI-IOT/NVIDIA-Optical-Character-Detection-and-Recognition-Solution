@@ -1,2 +1,5 @@
 # 0.1.0
-* init
+* support OCD DCN/MIXnet
+* support OCR CTC/ATTN/CLIP
+* support e2e test
+* provide inference tools, with program options

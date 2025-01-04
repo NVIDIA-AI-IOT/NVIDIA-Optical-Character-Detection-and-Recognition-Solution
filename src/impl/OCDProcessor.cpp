@@ -2,7 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 
-#include "OCDNetEngine.h"
+#include "OCDProcessor.h"
 #include "timer.hpp"
 
 namespace nvocdr {
@@ -17,10 +17,32 @@ inline void correctQuad(QUADANGLE& quadangle) {
     quadangle[1] = quadangle[0];
     quadangle[0] = tmp;
   }
+};
+
+cv::Size OCDProcessor::getInputHW() {
+  // dims = nchw
+  auto in_dims = mEngines[OCD_MODEL]->getInputDims(OCDNET_INPUT);
+  return {in_dims.d[3], in_dims.d[2]};
 }
 
-bool OCDNetEngine::customInit() {
-  setupInput(OCDNET_INPUT, {}, true);
+size_t OCDProcessor::getBatchSize() {
+  return mEngines[OCD_MODEL]->getBatchSize();
+};
+
+std::string OCDProcessor::getInputBufName() {
+  return mEngines[OCD_MODEL]->getBufName(OCDNET_INPUT);
+};
+
+OCDProcessor::OCDProcessor(const char name[], const nvOCDParam& param)
+    : BaseProcessor<nvOCDParam>(param) {
+  std::string model_file(mParam.model_file);
+  mEngines[OCD_MODEL].reset(new TRTEngine(OCD_MODEL, model_file, mParam.batch_size));
+}
+
+bool OCDProcessor::init() {
+  mEngines[OCD_MODEL]->initEngine();
+
+  mEngines[OCD_MODEL]->setupInput(OCDNET_INPUT, {}, true);
 
   // todo, unify output name, and remove this hack
   if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
@@ -28,17 +50,19 @@ bool OCDNetEngine::customInit() {
   } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
     mOutputName = "pred";
   }
-  setupOutput(mOutputName, {}, true);
+  mEngines[OCD_MODEL]->setupOutput(mOutputName, {}, true);
+
+  mEngines[OCD_MODEL]->postInit();
 
   return true;
 }
 
-float* OCDNetEngine::getMaskOutputBuf() {
+float* OCDProcessor::getMaskOutputBuf() {
   return reinterpret_cast<float*>(
-      mBufManager.getBuffer(getBufName(mOutputName), BUFFER_TYPE::HOST));
+      mBufManager.getBuffer(mEngines[OCD_MODEL]->getBufName(mOutputName), BUFFER_TYPE::HOST));
 }
 
-size_t OCDNetEngine::getOutputChannelIdx() {
+size_t OCDProcessor::getOutputChannelIdx() {
   if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
     return 1;
   } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
@@ -46,7 +70,7 @@ size_t OCDNetEngine::getOutputChannelIdx() {
   }
   return 0;
 }
-size_t OCDNetEngine::getOutputChannels() {
+size_t OCDProcessor::getOutputChannels() {
   if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
     return 4;
   } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
@@ -54,7 +78,7 @@ size_t OCDNetEngine::getOutputChannels() {
   }
   return 0;
 }
-void OCDNetEngine::computeTextCandidates(const cv::Mat& mask, std::vector<QUADANGLE>* const quads,
+void OCDProcessor::computeTextCandidates(const cv::Mat& mask, std::vector<QUADANGLE>* const quads,
                                          std::vector<Text>* const texts, size_t* num_text,
                                          const ProcessParam& process_param) {
   mTextCntrCandidates.clear();
@@ -64,7 +88,7 @@ void OCDNetEngine::computeTextCandidates(const cv::Mat& mask, std::vector<QUADAN
     computeTextCandidatesNormal(mask, quads, texts, num_text, process_param);
   }
 }
-void OCDNetEngine::computeTextCandidatesNormal(const cv::Mat& mask,
+void OCDProcessor::computeTextCandidatesNormal(const cv::Mat& mask,
                                                std::vector<QUADANGLE>* const quads,
                                                std::vector<Text>* const texts, size_t* num_text,
                                                const ProcessParam& process_param) {
@@ -130,13 +154,11 @@ void OCDNetEngine::computeTextCandidatesNormal(const cv::Mat& mask,
   }
 }
 
-
-
 // designed for mixnet, given the inner and outer text, and the inner fited line
 inline bool findMatryoshkaText(const std::vector<cv::Point>& inner,
-                               const std::vector<cv::Point>& outer, 
-                               cv::Mat& viz, cv::Scalar color, cv::RotatedRect* rotated_rect, float min_pixel_area) {
-  float ctr_area = cv::contourArea(inner);                          
+                               const std::vector<cv::Point>& outer,
+                               cv::RotatedRect* rotated_rect, float min_pixel_area) {
+  float ctr_area = cv::contourArea(inner);
   if (ctr_area <= min_pixel_area) {
     return false;
   }
@@ -155,26 +177,21 @@ inline bool findMatryoshkaText(const std::vector<cv::Point>& inner,
     rrect.size.height *= 2;
   }
 
-  *rotated_rect =rrect;
+  *rotated_rect = rrect;
   return true;
-                              
 }
 
-void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
+void OCDProcessor::computeTextCandidatesMixNet(const cv::Mat& mask,
                                                std::vector<QUADANGLE>* const quads,
                                                std::vector<Text>* const texts, size_t* num_text,
                                                const ProcessParam& process_param) {
-  Timer<100> timer;
-
-
   float resize_ratio = 0.4;
-  cv::Mat resized;
-  timer.Start();
 
+  cv::Mat resized;
   cv::resize(mask, resized,
              cv::Size(static_cast<int>(resize_ratio * mask.cols),
                       static_cast<int>(resize_ratio * mask.rows)));
-  
+
   // cv::Mat element = cv::getStructuringElement(0, {7, 7});
   // cv::erode( resized, resized, element );
   // cv::dilate( resized, resized, element );
@@ -182,10 +199,9 @@ void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
   std::vector<std::vector<cv::Point>> raw_contours;
   std::vector<cv::Vec4i> hierarchy;
   cv::findContours(~resized, raw_contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
-  // cv::imwrite("orig.png", ~resized);
 
-  cv::Mat viz(resized.size(), CV_8UC3, cv::Scalar(0, 0, 0));
-  cv::RNG rng(12345);
+//   cv::Mat viz(resized.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+//   cv::RNG rng(12345);
 
   std::vector<size_t> connected_compoment;
   std::vector<std::vector<size_t>> groups;
@@ -205,81 +221,47 @@ void OCDNetEngine::computeTextCandidatesMixNet(const cv::Mat& mask,
   }
   LOG(INFO) << "find text group: " << groups.size();
 
-// #pragma omp parallel for num_threads(8)
-  for (const auto &group: groups) {
-    cv::Scalar color(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+  // #pragma omp parallel for num_threads(8)
+  for (const auto& group : groups) {
+    // cv::Scalar color(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 
-    // LOG(INFO) << "found on goup " <<i << " group size: " << group[i].size();
+    // cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[0]]}, -1, color);
 
-    cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[0]]}, -1,
-                     color);
-
-    if (group.size() == 1) {
-      // no inner outer, 
-    }
+    // todo whether use this ??
+    // if (group.size() == 1) {
+    // }
 
     // 0 always = outer, start from 1
     for (size_t j = 1; j < group.size(); ++j) {
       cv::RotatedRect ret;
-      if (findMatryoshkaText(raw_contours[group[j]], raw_contours[group[0]], viz, color,
-                             &ret, process_param.min_pixel_area)) {
-        cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[j]]}, -1, color);
+      if (findMatryoshkaText(raw_contours[group[j]], raw_contours[group[0]], &ret,
+                             process_param.min_pixel_area)) {
+        // cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[j]]}, -1,
+        //                  color);
         auto& vertices = (*quads)[*num_text];
         Text& text = (*texts)[*num_text];
 
         ret.center = ret.center / resize_ratio;
         ret.size = ret.size / resize_ratio;
 
-
         ret.points(&vertices[0]);
         correctQuad(vertices);
 
 #pragma unroll
         for (size_t k = 0; k < QUAD; ++k) {
-          text.polygon[k* 2] = vertices[k].x;
+          text.polygon[k * 2] = vertices[k].x;
           text.polygon[k * 2 + 1] = vertices[k].y;
         }
         *num_text += 1;
 
         // todo need to return with higher score
         if (*num_text == process_param.max_candidate) {
-           return;
+          return;
         }
-
       };
-
-      // if (group[i][j] == inner) continue;
-      // cv::drawContours(viz, std::vector<std::vector<cv::Point>>{raw_contours[group[i][j]]}, -1, color);
-
-      // cv::Point p1(line[2] - 100 * line[0], line[3] - 100 * line[1]);
-
-      // // cv::Point p1(line[2] , line[3]);
-      // cv::Point p2(line[2] + 100 * line[0], line[3] + 100 * line[1]);
-
-      // cv::line(viz, p1, p2, color);
-      // break;
     }
-    // auto rotated = cv::minAreaRect(raw_contours[outer]);
-
-    // // prepare output
-    // auto& vertices = (*quads)[*num_text];
-    // Text& text = (*texts)[*num_text];
-
-    // rotated.points(&vertices[0]);
-    // correctQuad(vertices);
-
-    // #pragma unroll
-    //     for (size_t j = 0; j < QUAD; ++j) {
-    //       text.polygon[j * 2] = vertices[j].x;
-    //       text.polygon[j * 2 + 1] = vertices[j].y;
-    //     }
-    //     *num_text += 1;
-
-
   }
-  LOG(ERROR) << "find contours: " << timer;
-
-  cv::imwrite("hctnr.png", viz);
+//   cv::imwrite("hctnr.png", viz);
 }
 
 }  // namespace nvocdr

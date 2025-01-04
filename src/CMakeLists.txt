@@ -1,4 +1,4 @@
-find_package(OpenMP)
+# find_package(OpenMP)
 
 
 list(APPEND PLUGINS "nvinfer")
@@ -18,7 +18,8 @@ endforeach()
 
 
 # impl/nvOCDR.cpp 
-file(GLOB NVOCDR_SRC nvocdr.cpp impl/*.cpp impl/*.cu)
+file(GLOB NVOCDR_SRC nvocdr.cpp impl/TRTEngine.cpp impl/OCRProcessor.cpp impl/base.cpp impl/nvOCDR_impl.cpp impl/OCDProcessor.cpp impl/MemManager.cpp impl/kernel.cu)
+# file(GLOB NVOCDR_SRC nvocdr.cpp impl/*.cpp impl/*.cu)
 # file(GLOB NVOCDR_SRC impl/*.cpp impl/*.cu )
 
 add_library(nvocdr SHARED ${NVOCDR_SRC})
@@ -26,10 +27,10 @@ add_library(nvocdr SHARED ${NVOCDR_SRC})
 target_include_directories(nvocdr PUBLIC ${CUDA_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(nvocdr PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${TRT_PLUGIN_LIBS} glog::glog ${CUDA_npp_LIBRARY})
 
-if (OPENMP_FOUND)
-    message("-- OpenMP found")
-    target_link_libraries(nvocdr PUBLIC OpenMP::OpenMP_CXX)
-endif()
+# if (OPENMP_FOUND)
+#     message("-- OpenMP found")
+#     target_link_libraries(nvocdr PUBLIC OpenMP::OpenMP_CXX)
+# endif()
 
 # todo(shuohanc) add more supported arch
 set_target_properties(nvocdr PROPERTIES CUDA_ARCHITECTURES "50;72;86")
