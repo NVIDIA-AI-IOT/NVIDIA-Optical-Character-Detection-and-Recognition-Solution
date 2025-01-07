@@ -28,7 +28,7 @@ void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
   // set the output
   setOutput(output);
 
-  // LOG(INFO) << "tmp timer: " << mTmpTimer.get();
+  // LOG(INFO) << "tmp timer: " << mTmpTimer.getMean();
 
   // wall time of processing
   mE2ETimer.Stop();
@@ -39,8 +39,8 @@ void nvOCDR::restoreImage(const nvOCDRInput& input) {
   if (input.data_format == DATAFORMAT_TYPE_HWC) {
     mInputImage = cv::Mat(cv::Size(mInputShape[W_IDX], mInputShape[H_IDX]), CV_8UC3,
                           input.data, cv::Mat::AUTO_STEP);
-    memcpy(mBufManager.getBuffer("input_image", HOST), mInputImage.data, mInputImage.total() * mInputImage.elemSize());
-    mBufManager.copyHostToDevice("input_image", mStream); 
+    memcpy(mBufManager.getBuffer(ORIGIN_INPUT_BUF, HOST), mInputImage.data, mInputImage.total() * mInputImage.elemSize());
+    mBufManager.copyHostToDevice(ORIGIN_INPUT_BUF, mStream); 
 
   } else {
     // todo(shuohanc) restore from chw.
@@ -141,8 +141,13 @@ void nvOCDR::setOutput(nvOCDROutput* const output) {
 }
 
 void nvOCDR::initBuffers() {
-  mBufManager.initBuffer("input_image", mInputShape[C_IDX] * mInputShape[H_IDX] * mInputShape[W_IDX], true);  // 8UC3, origin size
-  mBufManager.initBuffer("input_gray", mInputShape[W_IDX] * mInputShape[H_IDX] * sizeof(float), true);  // 32FC1, origin size
+  mBufManager.initBuffer(ORIGIN_INPUT_BUF, mInputShape[C_IDX] * mInputShape[H_IDX] * mInputShape[W_IDX], true);  // 8UC3, origin size
+  mBufManager.initBuffer("testwarp", 100 * 32 * 32 * sizeof(float), true);  // 8UC3, origin size
+  if (mParam.ocr_param.type != nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    mBufManager.initBuffer(OCR_INPUT_BUF, mInputShape[W_IDX] * mInputShape[H_IDX] * sizeof(float), true);  // 32FC1, origin size
+  } else {
+    mBufManager.initBuffer(OCR_INPUT_BUF, mInputShape[W_IDX] * mInputShape[H_IDX] * 3 * sizeof(float), true); 
+  }
 }
 
 void nvOCDR::preprocessInputImage() {
@@ -175,18 +180,18 @@ void nvOCDR::preprocessInputImage() {
   // }
 
   launch_preprocess_gray(
-    static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
-    static_cast<float*>(mBufManager.getBuffer("input_gray", DEVICE)),
+    static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
+    static_cast<float*>(mBufManager.getBuffer(OCR_INPUT_BUF, DEVICE)),
     mResizeInfo.first.width, mResizeInfo.first.height, 
     mResizeInfo.first.width, mResizeInfo.first.height, OCR_PREPROC_PARAM, true, mStream
   );
   mInputGrayImage = cv::Mat(mResizeInfo.first.height, mResizeInfo.first.width, CV_32F, 
-    static_cast<float*>(mBufManager.getBuffer("input_gray", HOST))
+    static_cast<float*>(mBufManager.getBuffer(OCR_INPUT_BUF, HOST))
   );
-  mBufManager.copyDeviceToHost("input_gray", mStream);
+  mBufManager.copyDeviceToHost(OCR_INPUT_BUF, mStream);
 
   // cudaStreamSynchronize(mStream);
-  // float* a = static_cast<float*>(mBufManager.getBuffer("input_gray", HOST));
+  // float* a = static_cast<float*>(mBufManager.getBuffer(OCR_INPUT_BUF, HOST));
   // cv::Mat gray(mResizeInfo.first.height, mResizeInfo.first.width, CV_32F, a);
   // cv::imwrite("gray.png", denormalizeGray(gray));
 
@@ -253,11 +258,10 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
     size_t end_idx = std::min((i + 1) * num_ocr_bs, mNumTexts);
     // recog on all specified directions
     for (auto const& bl_idx : mOCRDirections) {
+      // mTmpTimer.Start();
       preprocessOCR(start_idx, end_idx, bl_idx);
-
-      // mOCRNet->syncMemory(true, true, mStream);
+      // LOG(INFO) << "preprocess ocr: " << mTmpTimer;
       mOCRProcessor->infer(true, mStream);
-      // mOCRNet->syncMemory(false, false, mStream);
       cudaStreamSynchronize(mStream);
 
       postprocessOCR(start_idx, end_idx);
@@ -295,14 +299,14 @@ void nvOCDR::preprocessOCDTileGPU(size_t start, size_t end) {
   for (size_t j = start; j < end; j++) {
      const auto& tile = mTiles[j];
      if(mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
-       nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
+       nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
                                  static_cast<float*>(mBufManager.getBuffer(mOCDProcessor->getInputBufName(), DEVICE)) + (j - start) * output_h * output_w * 3 , 
                                  mInputShape[W_IDX], mInputShape[H_IDX], tile, scale,
                                 OCD_NORMAL_PREPROR_PARAM,
                                  true, true, 
                             mStream);
      } else if(mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET){
-      nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer("input_image", DEVICE)),
+      nvocdr::launch_preprocess_color(static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
                           static_cast<float*>(mBufManager.getBuffer(mOCDProcessor->getInputBufName(), DEVICE)) + (j - start) * output_h * output_w * 3, 
                     mInputShape[W_IDX], mInputShape[H_IDX], tile, scale,
                     OCD_MIXNET_PREPROR_PARAM,
@@ -378,7 +382,6 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
           quad_pts[(j + bl_pt_idx) % QUAD] -
           cv::Point2f{static_cast<float>(rect.tl().x), static_cast<float>(rect.tl().y)};
     }
-
     // compute perspective transform
     cv::Mat h = cv::findHomography(transform_src, transform_dst);
     cv::Mat text_roi(ocr_input_h, ocr_input_w, CV_32F, buf + ocr_input_h * ocr_input_w * (i - start));
@@ -395,15 +398,68 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
       continue;
       LOG(WARNING) << "ignore text out side ";
     }
-    mTmpTimer.Start();
+    // mTmpTimer.Start();
     cv::warpPerspective(mInputGrayImage(rect), text_roi, h, cv::Size(ocr_input_w, ocr_input_h));
-    mTmpTimer.Stop();
+    // mTmpTimer.Stop();
     // // for debug
     if (mParam.process_param.debug_image) {
+      // cv::Mat roi = mInputGrayImage(rect);
+      cv::Mat warped(cv::Size(ocr_input_w, ocr_input_h), CV_32F);
+      h = h.inv();
+
+      std::vector<double> homo(9);
+      for(size_t t = 0; t < 9 ; ++t) {
+          homo[t] = h.at<double>(t / 3, t % 3);
+      }
+
+      launch_fused_preprocess_warp_perspective_gray(
+        static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
+        static_cast<float*>(mBufManager.getBuffer("testwarp", DEVICE)) + ocr_input_w * ocr_input_h * (i - start), 
+        mResizeInfo.first.width, mResizeInfo.first.height,
+        ocr_input_w, ocr_input_h, rect.tl().x, rect.tl().y, IMG_SCALE_GRAY, IMG_MEAN_GRAY, mStream,
+        homo[0],homo[1],homo[2],homo[3],homo[4],homo[5],homo[6],homo[7],homo[8]
+
+      );
+
+      for(size_t t = 0; t < warped.rows; ++t) {
+        for(size_t v = 0; v < warped.cols; ++v) {
+          // cv::Vec3d src(v, t, 1);
+          // cv::Mat dst = h * src;
+
+
+          float dst_xf = homo[0] * v + homo[1] * t + homo[2];
+          float dst_yf = homo[3] * v + homo[4] * t + homo[5];
+          float c      = homo[6] * v + homo[7] * t + homo[8];
+
+          int dst_x = (int)(dst_xf / c);
+          int dst_y = (int)(dst_yf / c);
+
+          warped.at<float>(t, v) = mInputGrayImage.at<float>(dst_y + rect.tl().y, dst_x + rect.tl().x);
+          // LOG(INFO) << v << t << "  |  "<< dst.at<double>(0, 0) / dst.at<double>(2, 0) << " " << dst.at<double>(1, 0) / dst.at<double>(2, 0); 
+          // break;
+          // LOG(INFO) << t << v;
+        }
+        // break;
+      }
+
       cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
-                  denormalizeGray(text_roi));
+                  denormalizeGray(warped));
+      // cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + "2.png",
+      //             denormalizeGray(mInputGrayImage(rect)));
     }
+    // break;
   }
+
+  mBufManager.copyDeviceToHost("testwarp", mStream);
+  float *buff = (float*)mBufManager.getBuffer("testwarp", HOST);
+
+  for(size_t i = start; i < end; ++i) {
+    cv::Mat aaa(ocr_input_h, ocr_input_w, CV_32F, buff + ocr_input_w * ocr_input_h * (i - start));
+
+    cv::imwrite("warp_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
+                  denormalizeGray(aaa));
+  }
+  
 }
 
 cv::Mat nvOCDR::denormalizeGray(const cv::Mat& input) {
@@ -423,6 +479,10 @@ void nvOCDR::postprocessOCR(size_t start, size_t end) {
 
 nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
   // todo(shuohanc) check param
+  if (param.input_shape[0] != 3 || param.input_shape[1] == 0 || param.input_shape[2] == 0) {
+    throw std::runtime_error("input shape error");
+  }
+
   cudaStreamCreate(&mStream);
 
   memcpy(mInputShape.data(), param.input_shape, mInputShape.size() * sizeof(size_t));
@@ -434,18 +494,18 @@ nvOCDR::nvOCDR(const nvOCDRParam& param) : mParam(param) {
   mQuadPts.resize(param.process_param.max_candidate);
 
   LOG(INFO) << "================= init ocr =================";
-  mOCRProcessor = std::make_unique<OCRProcessor>(OCR_PREFIX, param.ocr_param);
+  mOCRProcessor = std::make_unique<OCRProcessor>(param.ocr_param);
   // mOCRNet = std::make_unique<OCRNetEngine>(OCR_PREFIX, param.ocr_param);
   mOCRProcessor->init();
 
   LOG(INFO) << "================= init ocd =================";
-  mOCDProcessor = std::make_unique<OCDProcessor>(OCR_PREFIX, param.ocd_param);
+  mOCDProcessor = std::make_unique<OCDProcessor>(param.ocd_param);
   mOCDProcessor->init();
 
   // mOCDNet = std::make_unique<OCDNetEngine>(OCD_PREFIX, param.ocd_param);
   mOCDInputSize = mOCDProcessor->getInputHW();
   mOCRInputSize = mOCRProcessor->getInputHW();
-  
+
   LOG(INFO) << "ocd model with input HxW: " << mOCDInputSize;
   LOG(INFO) << "ocr model with input HxW: " << mOCRInputSize;
   // warmp up

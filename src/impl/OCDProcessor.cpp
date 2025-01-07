@@ -21,7 +21,7 @@ inline void correctQuad(QUADANGLE& quadangle) {
 
 cv::Size OCDProcessor::getInputHW() {
   // dims = nchw
-  auto in_dims = mEngines[OCD_MODEL]->getInputDims(OCDNET_INPUT);
+  auto in_dims = mEngines[OCD_MODEL]->getbindingDims(true, OCDNET_INPUT);
   return {in_dims.d[3], in_dims.d[2]};
 }
 
@@ -33,7 +33,7 @@ std::string OCDProcessor::getInputBufName() {
   return mEngines[OCD_MODEL]->getBufName(OCDNET_INPUT);
 };
 
-OCDProcessor::OCDProcessor(const char name[], const nvOCDParam& param)
+OCDProcessor::OCDProcessor(const nvOCDParam& param)
     : BaseProcessor<nvOCDParam>(param) {
   std::string model_file(mParam.model_file);
   mEngines[OCD_MODEL].reset(new TRTEngine(OCD_MODEL, model_file, mParam.batch_size));
@@ -46,9 +46,9 @@ bool OCDProcessor::init() {
 
   // todo, unify output name, and remove this hack
   if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
-    mOutputName = "fy_preds";
+    mOutputName = OCD_MIXNET_OUTPUT;
   } else if (mParam.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
-    mOutputName = "pred";
+    mOutputName = OCD_NORMAL_OUTPUT;
   }
   mEngines[OCD_MODEL]->setupOutput(mOutputName, {}, true);
 

@@ -112,6 +112,49 @@ __global__ void fused_preprocess_gray_kernel(uint8_t* src, float* dst, int src_w
   }
 }
 
+template <bool IN_BGR>
+__global__ void fused_preprocess_warp_perspective_gray_kernel(uint8_t *src, float* dst,
+ int src_w, int src_h,
+ int dst_w, int dst_h, int tl_x, int tl_y, float gray_scale, float mean,
+double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,double m9) {
+  const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
+  // printf("[%.2f, %.2f,]", matrix.mat[0], matrix.mat[8]);
+  if (dst_x < dst_w && dst_y < dst_h) {
+    float src_x = m1 * dst_x + m2 * dst_y + m3;
+    float src_y = m4 * dst_x + m5 * dst_y + m6;
+    float c     = m7 * dst_x + m8 * dst_y + m9;
+
+
+    src_x = src_x / c + tl_x;
+    src_y = src_y / c + tl_y;
+    // printf("[%d %d %.2f, %.2f, %.2f, ]\n", dst_y, dst_x, src_x, src_y);
+
+    float b = linearInterp<uint8_t, float>(src, src_y, src_x, 0, src_h, src_w);
+    float g = linearInterp<uint8_t, float>(src, src_y, src_x, 1, src_h, src_w);
+    float r = linearInterp<uint8_t, float>(src, src_y, src_x, 2, src_h, src_w);
+
+    if (!IN_BGR) {  // input = rgb, which mean need to swap b <-> r
+      float tmp = b;
+      b = r;
+      r = tmp;
+    }
+    float gray_value = (0.299 * r + 0.587 * g + 0.114 * b - mean) * gray_scale;
+    // // printf("[%d %d]", dst_y * dst_w, dst_x);
+    // if (dst_y * dst_w + dst_x >= 100 * 32) {
+    // }
+    // printf("[%d %d %.2f, %.2f, %.2f, ]\n", dst_y, dst_x, r,g,b);
+    *(dst + dst_y * dst_w + dst_x) = gray_value;
+    // *(dst + dst_y * dst_w + dst_x) = gray_value;
+    // *(dst ) = 0;
+    // *(dst  + dst_y * dst_w + dst_x) = gray_value;
+
+  }
+
+
+}
+
+
 namespace nvocdr {
 static constexpr size_t BLOCK_SIZE_X = 32U;
 static constexpr size_t BLOCK_SIZE_Y = 1024 / BLOCK_SIZE_X;
@@ -155,5 +198,17 @@ void launch_preprocess_gray(uint8_t* src, float* dst, int src_w, int src_h, int 
     fused_preprocess_gray_kernel<false><<<grid, block, 0, stream>>>(
         src, dst, src_w, src_h, dst_w, dst_h, param.gray_scale, param.mean);
   }
+}
+
+void launch_fused_preprocess_warp_perspective_gray(uint8_t *src, float* dst, int src_w, int src_h, int dst_w, int dst_h, int tl_x, int tl_y, float gray_scale, float mean, const cudaStream_t& stream,
+double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,double m9) {
+  dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
+  // dim3 grid(1, 1);
+  dim3 grid(divUp(dst_w, BLOCK_SIZE_X), divUp(dst_h, BLOCK_SIZE_Y));
+  // std::cout<< matrix.mat[0] << " " << matrix.mat[8];
+  fused_preprocess_warp_perspective_gray_kernel<true><<<grid, block, 0, stream>>>(src, dst,  
+  src_w, src_h, dst_w, dst_h, tl_x, tl_y, gray_scale, mean, m1, m2, m3, m4, m5, m6, m7, m8, m9);
+
+  
 }
 }  // namespace nvocdr

@@ -8,20 +8,24 @@
 #include "OCRProcessor.h"
 
 namespace nvocdr {
-OCRProcessor::OCRProcessor(const char name[], const nvOCRParam& param) : BaseProcessor<nvOCRParam>(param) {
+OCRProcessor::OCRProcessor(const nvOCRParam& param) : BaseProcessor<nvOCRParam>(param) {
     if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
         std::string model_file(mParam.model_file);
         mEngines[CTC_MODEL].reset(new TRTEngine(CTC_MODEL, model_file, mParam.batch_size));
+    } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+        std::string model_file_packed(mParam.model_file); 
+        std::string visual_model_model_file = model_file_packed.substr(0, model_file_packed.find(','));
+        std::string text_model_model_file = model_file_packed.substr(model_file_packed.find(',') + 1);
+        mEngines[CLIP_VISUAL_MODEL].reset(new TRTEngine(CLIP_VISUAL_MODEL, visual_model_model_file, mParam.batch_size));
+        mEngines[CLIP_TEXT_MODEL].reset(new TRTEngine(CLIP_TEXT_MODEL, text_model_model_file, mParam.batch_size));
     }
 }
 size_t OCRProcessor::getBatchSize() {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
     return mEngines[CTC_MODEL]->getBatchSize();
-    initCTC();
-    mEngines[CTC_MODEL]->postInit();
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
-
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    return mEngines[CLIP_VISUAL_MODEL]->getBatchSize(); // text and visual has same batch size
   } else {
     LOG(INFO) << "[ERROR] Unsupported decode mode";
   }
@@ -30,15 +34,23 @@ size_t OCRProcessor::getBatchSize() {
 bool OCRProcessor::init() {
   mDict.clear();
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
-    mEngines[CTC_MODEL]->initEngine();
     initCTC();
-    mEngines[CTC_MODEL]->postInit();
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
-
+    LOG(INFO) << "[ERROR] Unsupported model type";
+    throw std::runtime_error("Unsupported ATTN");
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    initCLIP();
   } else {
-    LOG(INFO) << "[ERROR] Unsupported decode mode";
+    LOG(INFO) << "[ERROR] Unsupported model type";
+    throw std::runtime_error("Unsupported model type");
   }
+
+  std::stringstream ss;
+  for (auto const& c : mDict) {
+    ss << c << ", ";
+  }
+  LOG(INFO) << "dict: " << ss.str();
+
   return true;
 }
 std::string OCRProcessor::getInputBufName() {
@@ -53,31 +65,30 @@ std::string OCRProcessor::getInputBufName() {
 };
 cv::Size OCRProcessor::getInputHW() {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
-    auto in_dims = mEngines[CTC_MODEL]->getInputDims(OCRNET_INPUT);
+    auto in_dims = mEngines[CTC_MODEL]->getbindingDims(true, OCRNET_INPUT);
     return {in_dims.d[3], in_dims.d[2]};
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    auto in_dims = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(true, CLIP_VISUAL_INPUT);
+    return {in_dims.d[3], in_dims.d[2]};
   } else {
     LOG(INFO) << "[ERROR] Unsupported decode mode";
   }
 }
 
 void OCRProcessor::initCTC() {
-    mDict.emplace_back("CTCBlank");
-    loadDict();
-
+  // init engine
+  mEngines[CTC_MODEL]->initEngine();
   mEngines[CTC_MODEL]->setupInput(OCRNET_INPUT, {}, true);
   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_PROB, {}, true);
   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_ID, {}, true);
-
-  mOutputCharLength = mEngines[CTC_MODEL]->getOutputDims(OCRNET_OUTPUT_ID).d[1];
+  mEngines[CTC_MODEL]->postInit();
+  mOutputCharLength = mEngines[CTC_MODEL]->getbindingDims(false, OCRNET_OUTPUT_ID).d[1];
   LOG(INFO) << "decode length: " << mOutputCharLength;
 
-  std::stringstream ss;
-  for (auto const& c : mDict) {
-    ss << c << ", ";
-  }
-  LOG(INFO) << "dict: " << ss.str();
+  // init dict
+  mDict.emplace_back("CTCBlank");
+  loadDict();
 }
 
 void OCRProcessor::initATTN() {
@@ -87,6 +98,44 @@ void OCRProcessor::initATTN() {
 }
 
 void OCRProcessor::initCLIP() {
+    // setup engine for visual 
+    mEngines[CLIP_VISUAL_MODEL]->initEngine();
+    mEngines[CLIP_VISUAL_MODEL]->setupInput(CLIP_VISUAL_INPUT, {}, true);
+    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_PROBS, {}, true);
+
+    auto clip_feature_dim = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(false, CLIP_VISUAL_OUTPUT_FEATURE);
+    auto clip_id_dim = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(false, CLIP_VISUAL_OUTPUT_ID);
+    auto clip_feature_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_FEATURE);
+    auto clip_id_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_ID);
+
+    mBufManager.initBuffer(clip_feature_buf_name, volume(clip_feature_dim) * sizeof(float), false);
+    mBufManager.initBuffer(clip_id_buf_name, volume(clip_id_dim) * sizeof(int), false);
+
+    auto* feature_dev_ptr = mBufManager.getBuffer(clip_feature_buf_name, DEVICE);
+    auto* id_dev_ptr = mBufManager.getBuffer(clip_id_buf_name, DEVICE);
+    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_FEATURE, {}, false, feature_dev_ptr);
+    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_ID, {}, false, id_dev_ptr);
+
+    // setup engine for text
+    mEngines[CLIP_TEXT_MODEL]->initEngine();
+    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_TEXT_TOKEN, {}, true);
+    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_FEATURE, {}, false, feature_dev_ptr);
+    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_ID, {}, false, id_dev_ptr);
+    mEngines[CLIP_TEXT_MODEL]->setupOutput(CLIP_TEXT_OUTPUT_LOGITS, {}, true);
+
+
+    mEngines[CLIP_VISUAL_MODEL]->postInit();
+    mEngines[CLIP_TEXT_MODEL]->postInit();
+
+  // init engine
+//   mEngines[CL]->initEngine();
+//   mEngines[CTC_MODEL]->setupInput(OCRNET_INPUT, {}, true);
+//   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_PROB, {}, true);
+//   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_ID, {}, true);
+//   mEngines[CTC_MODEL]->postInit();
+//   mOutputCharLength = mEngines[CTC_MODEL]->getOutputDims(OCRNET_OUTPUT_ID).d[1];
+  LOG(INFO) << "decode length: " << mOutputCharLength;
+
     mDict.emplace_back("[E]");
     loadDict();
     mDict.emplace_back("[B]");

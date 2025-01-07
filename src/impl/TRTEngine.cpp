@@ -65,73 +65,65 @@ bool TRTEngine::initEngine() {
       mRuntime->deserializeCudaEngine(engineBlob.data(), engineBlob.size())));
   mContext = std::move(TRTUniquePtr<IExecutionContext>(mEngine->createExecutionContext()));
 
-  size_t engine_max_batch_size = 0;
   for (int i = 0; i < mEngine->getNbIOTensors(); ++i) {
     const std::string tensor_name(mEngine->getIOTensorName(i));
 
     if (mEngine->getTensorIOMode(tensor_name.c_str()) == TensorIOMode::kINPUT) {
       mInputNames.push_back(tensor_name);
-      engine_max_batch_size =
-          mEngine->getProfileShape(tensor_name.c_str(), 0, OptProfileSelector::kMAX).d[0];
+      mInputDims[tensor_name] = mEngine->getTensorShape(tensor_name.c_str());;;
     } else {
       mOutputNames.push_back(tensor_name);
+      mOutputDims[tensor_name] = mEngine->getTensorShape(tensor_name.c_str());;
     }
   }
 
   if (mBatchSize == 0) {
-    mBatchSize = engine_max_batch_size;
+    mBatchSize = mEngine->getProfileShape(mInputNames[0].c_str(), 0, OptProfileSelector::kMAX).d[0];
   }
   return true;
 }
 
 
-void TRTEngine::setupInput(const std::string& input_name, const Dims& dims, bool host_buf) {
+void TRTEngine::setupInput(const std::string& input_name, const Dims& dims, bool host_buf, void* device_ptr) {
   // final shape = opt shape
   const std::string name = input_name.empty() ? mInputNames[0] : input_name;
   LOG(INFO) << "-------- setup input for name: " << name << "--------";
 
-  auto final_shape = mEngine->getProfileShape(name.c_str(), 0, OptProfileSelector::kOPT);
-
-  if (dims.nbDims != 0) {  // if dims provided
-                           // todo(shuohan) add check here if input dims bigger than max;
-  } else {                 // if no dims provided, use max batch size + opt
-    auto const max_shape = mEngine->getProfileShape(name.c_str(), 0, OptProfileSelector::kMAX);
-    final_shape.d[0] = mBatchSize;
-  }
+  auto final_shape = mInputDims.at(input_name);
+  final_shape.d[0] = mBatchSize;
 
   mInputH = final_shape.d[2];
   mInputW = final_shape.d[3];
 
   mContext->setInputShape(name.c_str(), final_shape);
-  mInputDims[name] = final_shape;
   LOG(INFO) << "model input '" << name << "', with shape: " << final_shape;
-  mBufManager.initBuffer(getBufName(name), volume(final_shape) * sizeof(float), host_buf);
-  mContext->setTensorAddress(name.c_str(),
-                             mBufManager.getBuffer(getBufName(name), BUFFER_TYPE::DEVICE));
+
+  if (device_ptr) {
+    mContext->setTensorAddress(name.c_str(), device_ptr);
+  } else  {
+    mBufManager.initBuffer(getBufName(name), volume(final_shape) * sizeof(float), host_buf);
+    mContext->setTensorAddress(name.c_str(),
+                              mBufManager.getBuffer(getBufName(name), BUFFER_TYPE::DEVICE));
+  }
 }
 
 
 void TRTEngine::setupOutput(const std::string& output_name, const Dims& dims,
-                                   bool host_buf) {
+                                   bool host_buf, void* device_ptr) {
   // final shape = opt shape
-  mOutputNames.push_back(output_name);
   LOG(INFO) << "-------- setup output for name: " << output_name << "--------\n";
 
-  auto final_shape = mEngine->getTensorShape(output_name.c_str());
-  if (dims.nbDims != 0) {  // if dims provided
-                           // todo(shuohan) add check here if input dims bigger than profile max;
-                           // auto const max_shape = mEngine->getTensorShape(output_name.c_str());
-  } else {                 // if no dims provided, use max batch size + opt
-    final_shape.d[0] = mBatchSize;
-  }
-  // mContext->setOutputShape(output_name.c_str(), final_shape);
+  auto final_shape = mOutputDims.at(output_name);
+  final_shape.d[0] = mBatchSize;
   LOG(INFO) << "model output '" << output_name << "', with shape: " << final_shape;
-
-  // todo(shuohanc) hardcode for float for now, cause all our model has 32bit output
-  mBufManager.initBuffer(getBufName(output_name), volume(final_shape) * sizeof(float), host_buf);
-  mOutputDims[output_name] = final_shape;
-  mContext->setTensorAddress(output_name.c_str(),
+  if(device_ptr)  {
+    mContext->setTensorAddress(output_name.c_str(), device_ptr);
+  } else {
+    mBufManager.initBuffer(getBufName(output_name), volume(final_shape) * sizeof(float), host_buf);
+    mContext->setTensorAddress(output_name.c_str(),
                              mBufManager.getBuffer(getBufName(output_name), BUFFER_TYPE::DEVICE));
+  }
+
 }
 
 
@@ -153,23 +145,21 @@ bool TRTEngine::syncMemory(bool input, bool host2device, const cudaStream_t& str
   return true;
 }
 
-nvinfer1::Dims TRTEngine::getOutputDims(const std::string& name) {
-  if (mOutputDims.count(name) > 0) {
-    return mOutputDims[name];
+nvinfer1::Dims TRTEngine::getbindingDims(bool is_input, const std::string& name) {
+  const std::map<std::string, nvinfer1::Dims>* binding_set = nullptr;
+  if (is_input) {
+    binding_set = &mInputDims;
+  } else {
+    binding_set = &mOutputDims;
+  }
+  if (binding_set->count(name) > 0) {
+    auto ret = binding_set->at(name);
+    ret.d[0] = mBatchSize;
+    return ret;
   } else {
     throw std::runtime_error("not output name: " + name);
   }
 }
-
-
-nvinfer1::Dims TRTEngine::getInputDims(const std::string& name) {
-  if (mInputDims.count(name) > 0) {
-    return mInputDims[name];
-  } else {
-    throw std::runtime_error("not input name: " + name);
-  }
-}
-
 
 
 bool TRTEngine::infer(const cudaStream_t& stream) {

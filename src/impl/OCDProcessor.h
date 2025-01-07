@@ -10,14 +10,17 @@
 #include "nvocdr.h"
 
 namespace nvocdr {
-static char OCD_PREFIX[] = "OCD";
+// static char OCD_PREFIX[] = "OCD";
 static char OCDNET_INPUT[] = "input";
 static char OCD_MODEL[] = "OCD";
+// 
+static char OCD_MIXNET_OUTPUT[] = "fy_preds";
+static char OCD_NORMAL_OUTPUT[] = "pred";
 
 class OCDProcessor : public BaseProcessor<nvOCDParam> {
  public:
   bool init() final;
-  OCDProcessor(const char name[], const nvOCDParam& param);
+  OCDProcessor(const nvOCDParam& param);
   cv::Size getInputHW() final;
   std::string getInputBufName() final;
   size_t getBatchSize() final;

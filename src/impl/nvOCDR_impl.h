@@ -66,6 +66,15 @@ static constexpr GRAY_PREPROC_PARAM OCR_PREPROC_PARAM {
   .mean = IMG_MEAN_GRAY
 };
 
+enum INPUT_NORM_STYLE {
+  INPUT_NORM_STYLE_MIXNET, // rgb + its only mean + std
+  INPUT_NORM_STYLE_DCN, // bgr + its only mean + std=1
+  INPUT_NORM_STYLE_CLIP, // ??
+  INPUT_NORM_STYLE_GRAY, // gray + normalized
+};
+static constexpr char ORIGIN_INPUT_BUF[] = "input_image";
+static constexpr char OCR_INPUT_BUF[] = "ocr_input_buf";
+// static constexpr OCD_INPUT_BUF[] = "ocr_input_image";
 
 class nvOCDR {
  public:

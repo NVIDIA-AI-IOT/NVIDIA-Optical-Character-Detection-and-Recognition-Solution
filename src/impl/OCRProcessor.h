@@ -7,11 +7,28 @@
 
 namespace nvocdr
 {
-constexpr char OCR_PREFIX[] = "OCR";
+// todo standarize these 
+// constexpr char OCR_PREFIX[] = "OCR"; // prefix for 
+
 constexpr char OCRNET_INPUT[] = "input";
 constexpr char OCRNET_OUTPUT_ID[] = "output_id";
 constexpr char OCRNET_OUTPUT_PROB[] = "output_prob";
+
 constexpr char CTC_MODEL[] = "OCR_CTC";
+
+constexpr char CLIP_VISUAL_MODEL[] = "CLIP_VISUAL";
+constexpr char CLIP_VISUAL_INPUT[] = "imgs";
+constexpr char CLIP_VISUAL_OUTPUT_FEATURE[] = "img_feature";
+constexpr char CLIP_VISUAL_OUTPUT_PROBS[] = "visual_decode_probs"; // bx26x95, tokenize and put o text_token
+constexpr char CLIP_VISUAL_OUTPUT_ID[] = "tgt_in";
+
+constexpr char CLIP_TEXT_MODEL[] = "CLIP_TEXT";
+constexpr char CLIP_TEXT_INPUT_TEXT_TOKEN[] = "text_token"; // bx16
+constexpr char CLIP_TEXT_INPUT_FEATURE[] = "img_feature";
+constexpr char CLIP_TEXT_INPUT_ID[] = "tgt_in";
+constexpr char CLIP_TEXT_OUTPUT_LOGITS[] = "logits";
+
+
 
 class OCRProcessor : public BaseProcessor<nvOCRParam> {
 public:
@@ -21,7 +38,7 @@ public:
   std::string getInputBufName() final;
   size_t getBatchSize() final;
 
-  OCRProcessor(const char name[], const nvOCRParam& param);
+  OCRProcessor(const nvOCRParam& param);
   void decode(Text* const text, size_t idx);
 
  private:
