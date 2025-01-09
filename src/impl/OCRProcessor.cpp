@@ -58,6 +58,7 @@ std::string OCRProcessor::getInputBufName() {
     return mEngines[CTC_MODEL]->getBufName(OCRNET_INPUT);
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    return mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_INPUT);
   } else {
     LOG(INFO) << "[ERROR] Unsupported decode mode";
     throw std::runtime_error("Unsupported decode mode");
@@ -65,11 +66,11 @@ std::string OCRProcessor::getInputBufName() {
 };
 cv::Size OCRProcessor::getInputHW() {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
-    auto in_dims = mEngines[CTC_MODEL]->getbindingDims(true, OCRNET_INPUT);
+    auto in_dims = mEngines[CTC_MODEL]->getBindingDims(true, OCRNET_INPUT);
     return {in_dims.d[3], in_dims.d[2]};
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
-    auto in_dims = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(true, CLIP_VISUAL_INPUT);
+    auto in_dims = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(true, CLIP_VISUAL_INPUT);
     return {in_dims.d[3], in_dims.d[2]};
   } else {
     LOG(INFO) << "[ERROR] Unsupported decode mode";
@@ -83,7 +84,7 @@ void OCRProcessor::initCTC() {
   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_PROB, {}, true);
   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_ID, {}, true);
   mEngines[CTC_MODEL]->postInit();
-  mOutputCharLength = mEngines[CTC_MODEL]->getbindingDims(false, OCRNET_OUTPUT_ID).d[1];
+  mOutputCharLength = mEngines[CTC_MODEL]->getBindingDims(false, OCRNET_OUTPUT_ID).d[1];
   LOG(INFO) << "decode length: " << mOutputCharLength;
 
   // init dict
@@ -103,8 +104,8 @@ void OCRProcessor::initCLIP() {
     mEngines[CLIP_VISUAL_MODEL]->setupInput(CLIP_VISUAL_INPUT, {}, true);
     mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_PROBS, {}, true);
 
-    auto clip_feature_dim = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(false, CLIP_VISUAL_OUTPUT_FEATURE);
-    auto clip_id_dim = mEngines[CLIP_VISUAL_MODEL]->getbindingDims(false, CLIP_VISUAL_OUTPUT_ID);
+    auto clip_feature_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_FEATURE);
+    auto clip_id_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_ID);
     auto clip_feature_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_FEATURE);
     auto clip_id_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_ID);
 
@@ -127,19 +128,23 @@ void OCRProcessor::initCLIP() {
     mEngines[CLIP_VISUAL_MODEL]->postInit();
     mEngines[CLIP_TEXT_MODEL]->postInit();
 
-  // init engine
-//   mEngines[CL]->initEngine();
-//   mEngines[CTC_MODEL]->setupInput(OCRNET_INPUT, {}, true);
-//   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_PROB, {}, true);
-//   mEngines[CTC_MODEL]->setupOutput(OCRNET_OUTPUT_ID, {}, true);
-//   mEngines[CTC_MODEL]->postInit();
-//   mOutputCharLength = mEngines[CTC_MODEL]->getOutputDims(OCRNET_OUTPUT_ID).d[1];
-  LOG(INFO) << "decode length: " << mOutputCharLength;
 
     mDict.emplace_back("[E]");
     loadDict();
     mDict.emplace_back("[B]");
     mDict.emplace_back("[P]");
+
+    auto batch_size = getBatchSize();
+    auto clip_prob_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_PROBS);
+    mOutputCharLength = clip_prob_dim.d[1];
+    mClipCharTypeSize = clip_prob_dim.d[2];
+
+    mTmpText.resize(batch_size);
+    for(size_t i = 0; i < batch_size;++i ) {
+        mTmpText[i].resize(mOutputCharLength);
+    }
+    LOG(INFO) << "init CLIP visual temp space " << mOutputCharLength << "x" << mClipCharTypeSize;
+    // LOG(INFO) << "clip dict: " << CLIP_DICT;
 }
 
 
@@ -173,9 +178,9 @@ void OCRProcessor::decode(Text* const text, size_t idx) {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
     decodeCTC(text, idx);
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
-    decodeATTNOrCLIP(text, idx, "[s]");
+    // decodeATTNOrCLIP(text, idx, "[s]");
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
-    decodeATTNOrCLIP(text, idx, "[E]");
+    // decodeATTNOrCLIP(text, idx, "[E]");
   }
 }
 
@@ -212,7 +217,50 @@ void OCRProcessor::decodeCTC(Text* const text, size_t idx) {
   }
 }
 
-void OCRProcessor::decodeATTNOrCLIP(Text* const text, size_t idx, const std::string& ending) {
+bool OCRProcessor::infer(bool sync_input, const cudaStream_t& stream) {
+  if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    // clip visual infer
+    mEngines[CLIP_VISUAL_MODEL]->infer(stream);
+    decodeCLIPVisual(stream);
+    // tokenizer
+
+    // clip text infer
+    mEngines[CLIP_TEXT_MODEL]->infer(stream);
+  } else {
+    BaseProcessor<nvOCRParam>::infer(sync_input, stream);
+  } 
+  return true;  
+};
+
+// inline fi
+void OCRProcessor::decodeCLIPVisual(const cudaStream_t& stream) {
+  const auto prob_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_PROBS);
+  mBufManager.copyDeviceToHost(prob_buf_name, stream);  
+  auto* prob = static_cast<float*>(mBufManager.getBuffer(prob_buf_name, HOST));
+  
+  auto batch_size = getBatchSize();
+  
+  for(size_t i = 0; i < batch_size; ++i) {
+    for(size_t j = 0; j < mOutputCharLength; ++j) {
+        float max_prob = -1;
+        size_t max_idx = 0;
+        for(size_t t = 0; t < mClipCharTypeSize; ++t) {
+          auto char_prob = prob[i * mOutputCharLength * mClipCharTypeSize + j * mClipCharTypeSize + t];
+        //   LOG(INFO) << char_prob;
+          if (char_prob > max_prob) {
+            max_prob = char_prob;
+            max_idx = t;
+          }
+        }
+        mTmpText[i][j] = CLIP_CHAR[max_idx];
+    }
+    LOG(INFO) << std::string(mTmpText[i].begin(), mTmpText[i].end());
+  }
+
+}
+
+
+// void OCRProcessor::decodeATTN(Text* const text, size_t idx, const std::string& ending) {
 
 //   size_t offset = idx * mOutputCharLength;
 //   float* prob = reinterpret_cast<float*>(
@@ -237,5 +285,5 @@ void OCRProcessor::decodeATTNOrCLIP(Text* const text, size_t idx, const std::str
 
 //   text->text_length = ret.length();
 //   text->conf = score;
-}
+// }
 }  // namespace nvocdr

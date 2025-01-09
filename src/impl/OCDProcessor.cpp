@@ -21,7 +21,7 @@ inline void correctQuad(QUADANGLE& quadangle) {
 
 cv::Size OCDProcessor::getInputHW() {
   // dims = nchw
-  auto in_dims = mEngines[OCD_MODEL]->getbindingDims(true, OCDNET_INPUT);
+  auto in_dims = mEngines[OCD_MODEL]->getBindingDims(true, OCDNET_INPUT);
   return {in_dims.d[3], in_dims.d[2]};
 }
 

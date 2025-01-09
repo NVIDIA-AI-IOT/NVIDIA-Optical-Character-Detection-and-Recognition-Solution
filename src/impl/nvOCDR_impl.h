@@ -10,8 +10,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "MemManager.h"
-// #include "OCDNetEngine.h"
-// #include "OCRNetEngine.h"
 #include "OCRProcessor.h"
 #include "OCDProcessor.h"
 #include "nvocdr.h"
@@ -61,9 +59,10 @@ static constexpr COLOR_PREPROC_PARAM OCD_MIXNET_PREPROR_PARAM {
     .b_std = IMG_MEAN_B_STD_MIXNET
 };
 
-static constexpr GRAY_PREPROC_PARAM OCR_PREPROC_PARAM {
-  .gray_scale = IMG_SCALE_GRAY,
-  .mean = IMG_MEAN_GRAY
+// reuse COLOR_PREPROC_PARAM
+static constexpr COLOR_PREPROC_PARAM OCR_PREPROC_GRAY_PARAM {
+  .rgb_scale = IMG_SCALE_GRAY,
+  .r_mean = IMG_MEAN_GRAY
 };
 
 enum INPUT_NORM_STYLE {
@@ -72,9 +71,8 @@ enum INPUT_NORM_STYLE {
   INPUT_NORM_STYLE_CLIP, // ??
   INPUT_NORM_STYLE_GRAY, // gray + normalized
 };
+
 static constexpr char ORIGIN_INPUT_BUF[] = "input_image";
-static constexpr char OCR_INPUT_BUF[] = "ocr_input_buf";
-// static constexpr OCD_INPUT_BUF[] = "ocr_input_image";
 
 class nvOCDR {
  public:
@@ -85,13 +83,11 @@ class nvOCDR {
   void process(const nvOCDRInput& input, nvOCDROutput* const output);
   void printTimeStat();
 
-  void testfunc(cv::Mat & input_image);
-
  private:
   void initBuffers();
   void processTile(const nvOCDRInput& input);
 
-  void handleStrategy(const nvOCDRInput& input);
+  void handleStrategy();
 
   void getTilePlan(size_t input_w, size_t input_h, size_t raw_w, size_t raw_h, size_t stride);
   void preprocessOCDTile(size_t start, size_t end);
@@ -102,50 +98,52 @@ class nvOCDR {
   void preprocessOCR(size_t start, size_t end, size_t bl_pt_idx);
   void postprocessOCR(size_t start, size_t end);
 
-  void preprocessInputImage();
   void restoreImage(const nvOCDRInput& input);
   void setOutput(nvOCDROutput* const output);
-  cv::Mat denormalizeGray(const cv::Mat& input);
 
-  // std::unique_ptr<OCRNetEngine> mOCRNet;
-  // std::unique_ptr<OCDNetEngine> mOCDNet;
   std::unique_ptr<OCRProcessor> mOCRProcessor;
   std::unique_ptr<OCDProcessor> mOCDProcessor;
 
   BufferManager& mBufManager = BufferManager::Instance();
 
-  cv::Mat mInputImage;         // origin input image, aribitrial size
-  cv::Mat mInputImageResized;  // origin input image, aribitrial size
+  cv::Mat mInputImage;        
 
-  cv::Mat mInputImageResized32F;  // input image, float32, resized
-  cv::Mat mOCDScoreMap;           // OCD score map, size = resized
-  cv::Mat mOCDOutputMask;         // OCD output mask, size = resized
-  cv::Mat mOCDValidCntMap;        // OCD valid cnt map, size = resized
-
-  cv::Mat mInputGrayImage;  // input image, float32 and gray, size = mInputImage
+  cv::Mat mOCDScoreMap;           
+  cv::Mat mOCDOutputMask;         
+  cv::Mat mOCDValidCntMap;   
 
   std::vector<size_t> mOCRDirections;
 
-  /** origin size, resized size */
-  std::pair<cv::Size, cv::Size> mResizeInfo;
   std::vector<cv::Rect> mTiles;
 
+  /// @brief text output
+  std::vector<Text> mTexts;
+  /// @brief output text number 
+  size_t mNumTexts;
+  /// @brief output for 
   std::vector<QUADANGLE> mQuadPts;
 
-  std::vector<Text> mTexts;
-  size_t mNumTexts;
+
+  /// @brief ocd engine expected size
   cv::Size mOCDInputSize;
+  /// @brief ocr engine expected size
   cv::Size mOCRInputSize;
 
-  std::array<size_t, 3> mInputShape; // c, h, w
+  /// @brief input channe number 
+  size_t mInputChannels = 3;
+  /// @brief origin size for input image
+  cv::Size mRawInputSize;
+  /// @brief destionate size for ocd
+  cv::Size mDestinateSize;
 
+  // todo(shuohanc) use difference stream to improve performance more
   cudaStream_t mStream;
   nvOCDRParam mParam;
-  Timer<TIME_HISTORY_SIZE> mPreprocessTimer;
+
+  // Timer<TIME_HISTORY_SIZE> mPreprocessTimer;
   Timer<TIME_HISTORY_SIZE> mOCDTimer;
   Timer<TIME_HISTORY_SIZE> mSelectProcessTimer;
   Timer<TIME_HISTORY_SIZE> mOCRTimer;
   Timer<TIME_HISTORY_SIZE> mE2ETimer;
-  Timer<TIME_HISTORY_SIZE> mTmpTimer;
 };
 }  // namespace nvocdr

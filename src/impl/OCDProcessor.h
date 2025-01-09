@@ -10,7 +10,6 @@
 #include "nvocdr.h"
 
 namespace nvocdr {
-// static char OCD_PREFIX[] = "OCD";
 static char OCDNET_INPUT[] = "input";
 static char OCD_MODEL[] = "OCD";
 // 

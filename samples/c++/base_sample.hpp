@@ -17,6 +17,7 @@ namespace nvocdr
         mParam.input_shape[0] = 3;
         mParam.input_shape[1] = height;
         mParam.input_shape[2] = width;
+        // mParam.ocr_param.batch_size = 1;
         mHandler = nvOCDR_initialize(mParam);
       };
 
@@ -56,11 +57,11 @@ namespace nvocdr
             }
             if (mShowScore)
             {
-              cv::putText(viz, std::to_string(text.conf), (pts[1] + pts[2]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+              cv::putText(viz, std::to_string(text.conf), (pts[1] + pts[2]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
             }
             if (mShowText)
             {
-              cv::putText(viz, std::string(text.text), (pts[0] + pts[3]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+              cv::putText(viz, std::string(text.text), (pts[0] + pts[3]) / 2, cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
             }
           }
         }

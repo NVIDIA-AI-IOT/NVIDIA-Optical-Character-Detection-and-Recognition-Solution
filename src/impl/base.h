@@ -17,7 +17,7 @@ class BaseProcessor {
 public:
   BaseProcessor(const Param& param): mParam(param) {};
   virtual bool init() = 0;
-  bool infer(bool sync_input, const cudaStream_t& stream);
+  virtual bool infer(bool sync_input, const cudaStream_t& stream);
 
   virtual cv::Size getInputHW() = 0;
   virtual size_t getBatchSize() = 0;

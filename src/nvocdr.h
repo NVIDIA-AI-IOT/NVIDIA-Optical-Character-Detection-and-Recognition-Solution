@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
   enum OCR_MODEL_TYPE { OCR_MODEL_TYPE_CTC, OCR_MODEL_TYPE_ATTN, OCR_MODEL_TYPE_CLIP };
   char model_file[MAX_FILE_PATH];
+  char vocab_file[MAX_FILE_PATH];
   char dict[MAX_FILE_PATH] = "default";
   // bs use to do infer, tune it for device with different mem, -1 to use engine allowed max
   size_t batch_size =0;  

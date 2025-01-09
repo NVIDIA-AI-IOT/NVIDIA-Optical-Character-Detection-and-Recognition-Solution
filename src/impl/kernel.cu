@@ -44,91 +44,89 @@ __host__ __device__ __forceinline__ dstDtype linearInterp(srcDtype* src, float y
   return (dstDtype)out;
 }
 
-//8UC3, origin size -> 32FC3, normalized
-template <bool IN_BGR, bool OUT_BGR>
-__global__ void fused_preprocess_color_kernel(uint8_t* src, float* dst, int src_w, int src_h,
-                                              float scale_x, float scale_y,
-                                              nvocdr::ROI roi,  // roi on dst image
-                                              float rbg_scale, float r_mean, float g_mean,
-                                              float b_mean, float r_std, float g_std, float b_std) {
+// template <bool IN_BGR, bool OUT_BGR>
+// __global__ void fused_preprocess_color_kernel(uint8_t* src, float* dst, int src_w, int src_h,
+//                                               float scale_x, float scale_y,
+//                                               nvocdr::ROI roi,  // roi on dst image
+//                                               float rbg_scale, float r_mean, float g_mean,
+//                                               float b_mean, float r_std, float g_std, float b_std) {
+//   const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
+//   const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+//   size_t channel_size = roi.width * roi.height;
+//   if (dst_x < roi.width && dst_y < roi.height) {
+//     float fy = (float)((dst_y + roi.y + 0.5f) * scale_y - 0.5f);
+//     float fx = (float)((dst_x + roi.x + 0.5f) * scale_x - 0.5f);
+
+//     float b = linearInterp<uint8_t, float>(src, fy, fx, 0, src_h, src_w);
+//     float g = linearInterp<uint8_t, float>(src, fy, fx, 1, src_h, src_w);
+//     float r = linearInterp<uint8_t, float>(src, fy, fx, 2, src_h, src_w);
+
+//     if (!IN_BGR) {  // input = rgb, which mean need to swap b <-> r
+//       float tmp = b;
+//       b = r;
+//       r = tmp;
+//     }
+
+//     b = (b / rbg_scale - b_mean) / b_std;
+//     g = (g / rbg_scale - g_mean) / g_std;
+//     r = (r / rbg_scale - r_mean) / r_std;
+
+//     if (OUT_BGR) {
+//       *(dst + 0 * channel_size + dst_y * roi.width + dst_x) = b;
+//       *(dst + 1 * channel_size + dst_y * roi.width + dst_x) = g;
+//       *(dst + 2 * channel_size + dst_y * roi.width + dst_x) = r;
+//     } else {
+//       *(dst + 0 * channel_size + dst_y * roi.width + dst_x) = r;
+//       *(dst + 1 * channel_size + dst_y * roi.width + dst_x) = g;
+//       *(dst + 2 * channel_size + dst_y * roi.width + dst_x) = b;
+//     }
+//   }
+// }
+
+// template <bool IN_BGR>
+// __global__ void fused_preprocess_gray_kernel(uint8_t* src, float* dst, int src_w, int src_h,
+//                                              int dst_w, int dst_h, float gray_scale, float mean) {
+//   const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
+//   const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+//   float scale_y = src_h / dst_h;
+//   float scale_x = src_w / dst_w;
+//   if (dst_x < dst_w && dst_y < dst_h) {
+//     float fy = (float)((dst_y + 0.5f) * scale_y - 0.5f);
+//     float fx = (float)((dst_x + 0.5f) * scale_x - 0.5f);
+
+//     float b = linearInterp<uint8_t, float>(src, fy, fx, 0, src_h, src_w);
+//     float g = linearInterp<uint8_t, float>(src, fy, fx, 1, src_h, src_w);
+//     float r = linearInterp<uint8_t, float>(src, fy, fx, 2, src_h, src_w);
+
+//     if (!IN_BGR) {  // input = rgb, which mean need to swap b <-> r
+//       float tmp = b;
+//       b = r;
+//       r = tmp;
+//     }
+
+//     float gray_value = (0.299 * r + 0.587 * g + 0.114 * b - mean) * gray_scale;
+//     *(dst + dst_y * dst_w + dst_x) = gray_value;
+//   }
+// }
+
+template <bool IN_BGR, bool OUT_BGR, bool OUT_GRAY>
+__global__ void fused_preprocess_warp_perspective_kernel(uint8_t* src, float* dst, int src_w,
+                                                         int src_h, int dst_w, int dst_h,
+                                                         nvocdr::COLOR_PREPROC_PARAM param,
+                                                         double m1, double m2, double m3, double m4,
+                                                         double m5, double m6, double m7, double m8,
+                                                         double m9) {
   const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
   const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
-
-  size_t channel_size = roi.width * roi.height;
-  if (dst_x < roi.width && dst_y < roi.height) {
-    float fy = (float)((dst_y + roi.y + 0.5f) * scale_y - 0.5f);
-    float fx = (float)((dst_x + roi.x + 0.5f) * scale_x - 0.5f);
-
-    float b = linearInterp<uint8_t, float>(src, fy, fx, 0, src_h, src_w);
-    float g = linearInterp<uint8_t, float>(src, fy, fx, 1, src_h, src_w);
-    float r = linearInterp<uint8_t, float>(src, fy, fx, 2, src_h, src_w);
-
-    if (!IN_BGR) {  // input = rgb, which mean need to swap b <-> r
-      float tmp = b;
-      b = r;
-      r = tmp;
-    }
-
-    b = (b / rbg_scale - b_mean) / b_std;
-    g = (g / rbg_scale - g_mean) / g_std;
-    r = (r / rbg_scale - r_mean) / r_std;
-
-    if (OUT_BGR) {
-      *(dst + 0 * channel_size + dst_y * roi.width + dst_x) = b;
-      *(dst + 1 * channel_size + dst_y * roi.width + dst_x) = g;
-      *(dst + 2 * channel_size + dst_y * roi.width + dst_x) = r;
-    } else {
-      *(dst + 0 * channel_size + dst_y * roi.width + dst_x) = r;
-      *(dst + 1 * channel_size + dst_y * roi.width + dst_x) = g;
-      *(dst + 2 * channel_size + dst_y * roi.width + dst_x) = b;
-    }
-  }
-}
-
-template <bool IN_BGR>
-__global__ void fused_preprocess_gray_kernel(uint8_t* src, float* dst, int src_w, int src_h,
-                                             int dst_w, int dst_h, float gray_scale, float mean) {
-  const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
-  const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
-
-  float scale_y = src_h / dst_h;
-  float scale_x = src_w / dst_w;
-  if (dst_x < dst_w && dst_y < dst_h) {
-    float fy = (float)((dst_y + 0.5f) * scale_y - 0.5f);
-    float fx = (float)((dst_x + 0.5f) * scale_x - 0.5f);
-
-    float b = linearInterp<uint8_t, float>(src, fy, fx, 0, src_h, src_w);
-    float g = linearInterp<uint8_t, float>(src, fy, fx, 1, src_h, src_w);
-    float r = linearInterp<uint8_t, float>(src, fy, fx, 2, src_h, src_w);
-
-    if (!IN_BGR) {  // input = rgb, which mean need to swap b <-> r
-      float tmp = b;
-      b = r;
-      r = tmp;
-    }
-
-    float gray_value = (0.299 * r + 0.587 * g + 0.114 * b - mean) * gray_scale;
-    *(dst + dst_y * dst_w + dst_x) = gray_value;
-  }
-}
-
-template <bool IN_BGR>
-__global__ void fused_preprocess_warp_perspective_gray_kernel(uint8_t *src, float* dst,
- int src_w, int src_h,
- int dst_w, int dst_h, int tl_x, int tl_y, float gray_scale, float mean,
-double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,double m9) {
-  const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
-  const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
-  // printf("[%.2f, %.2f,]", matrix.mat[0], matrix.mat[8]);
   if (dst_x < dst_w && dst_y < dst_h) {
     float src_x = m1 * dst_x + m2 * dst_y + m3;
     float src_y = m4 * dst_x + m5 * dst_y + m6;
-    float c     = m7 * dst_x + m8 * dst_y + m9;
+    float c = m7 * dst_x + m8 * dst_y + m9;
 
-
-    src_x = src_x / c + tl_x;
-    src_y = src_y / c + tl_y;
-    // printf("[%d %d %.2f, %.2f, %.2f, ]\n", dst_y, dst_x, src_x, src_y);
+    src_x = src_x / c;
+    src_y = src_y / c;
 
     float b = linearInterp<uint8_t, float>(src, src_y, src_x, 0, src_h, src_w);
     float g = linearInterp<uint8_t, float>(src, src_y, src_x, 1, src_h, src_w);
@@ -139,76 +137,101 @@ double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,
       b = r;
       r = tmp;
     }
-    float gray_value = (0.299 * r + 0.587 * g + 0.114 * b - mean) * gray_scale;
-    // // printf("[%d %d]", dst_y * dst_w, dst_x);
-    // if (dst_y * dst_w + dst_x >= 100 * 32) {
-    // }
-    // printf("[%d %d %.2f, %.2f, %.2f, ]\n", dst_y, dst_x, r,g,b);
-    *(dst + dst_y * dst_w + dst_x) = gray_value;
-    // *(dst + dst_y * dst_w + dst_x) = gray_value;
-    // *(dst ) = 0;
-    // *(dst  + dst_y * dst_w + dst_x) = gray_value;
-
+    if (OUT_GRAY) {
+      float gray_value = (0.299 * r + 0.587 * g + 0.114 * b - param.r_mean) * param.rgb_scale;
+      *(dst + dst_y * dst_w + dst_x) = gray_value;
+    } else {
+      size_t channel_size = dst_w * dst_h;
+      b = (b / param.rgb_scale - param.b_mean) / param.b_std;
+      g = (g / param.rgb_scale - param.g_mean) / param.g_std;
+      r = (r / param.rgb_scale - param.r_mean) / param.r_std;
+      if (OUT_BGR) {
+        *(dst + 0 * channel_size + dst_y * dst_w + dst_x) = b;
+        *(dst + 1 * channel_size + dst_y * dst_w + dst_x) = g;
+        *(dst + 2 * channel_size + dst_y * dst_w + dst_x) = r;
+      } else {
+        *(dst + 0 * channel_size + dst_y * dst_w + dst_x) = r;
+        *(dst + 1 * channel_size + dst_y * dst_w + dst_x) = g;
+        *(dst + 2 * channel_size + dst_y * dst_w + dst_x) = b;
+      }
+    }
   }
-
-
 }
-
 
 namespace nvocdr {
 static constexpr size_t BLOCK_SIZE_X = 32U;
 static constexpr size_t BLOCK_SIZE_Y = 1024 / BLOCK_SIZE_X;
 
-void launch_preprocess_color(uint8_t* src, float* dst, int src_w, int src_h, const cv::Rect& rect,
-                             const cv::Size2f& scale, const COLOR_PREPROC_PARAM& param, bool in_bgr,
-                             bool out_bgr, const cudaStream_t& stream) {
-  nvocdr::ROI roi{
-      .x = rect.tl().x, .y = rect.tl().y, .width = rect.size().width, .height = rect.size().height};
+// void launch_preprocess_color(uint8_t* src, float* dst, int src_w, int src_h, const cv::Rect& rect,
+//                              const cv::Size2f& scale, const COLOR_PREPROC_PARAM& param, bool in_bgr,
+//                              bool out_bgr, const cudaStream_t& stream) {
+//   nvocdr::ROI roi{
+//       .x = rect.tl().x, .y = rect.tl().y, .width = rect.size().width, .height = rect.size().height};
 
+//   dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
+//   dim3 grid(divUp(roi.width, BLOCK_SIZE_X), divUp(roi.height, BLOCK_SIZE_Y));
+//   double scale_x = static_cast<double>(scale.width);
+//   double scale_y = static_cast<double>(scale.height);
+//   if (in_bgr && out_bgr) {
+//     fused_preprocess_warp_perspective_kernel<true, true, false><<<grid, block, 0, stream>>>(src, dst,
+//       src_w, src_h, roi, param, scale_x, 0., roi.x * scale_x, 0, scale_y, roi.y * scale_y,
+//                      0 ,0, 1);
+//   } else if (!in_bgr && out_bgr) {
+//     fused_preprocess_warp_perspective_kernel<false, true, false><<<grid, block, 0, stream>>>(src, dst,
+//       src_w, src_h, roi, param, scale_x, 0., roi.x * scale_x, 0, scale_y, roi.y * scale_y,
+//                      0 ,0, 1);
+//   } else if (in_bgr && !out_bgr) {
+//     fused_preprocess_warp_perspective_kernel<true, false, false><<<grid, block, 0, stream>>>(src, dst,
+//       src_w, src_h, roi, param, scale_x, 0., roi.x * scale_x, 0, scale_y, roi.y * scale_y,
+//                      0 ,0, 1);
+//   } else {
+//     fused_preprocess_warp_perspective_kernel<false, false, false><<<grid, block, 0, stream>>>(src, dst,
+//       src_w, src_h, roi, param, scale_x, 0., roi.x * scale_x, 0, scale_y, roi.y * scale_y,
+//                      0 ,0, 1);
+//   }
+// }
+
+// void launch_fused_preprocess_warp_perspective_gray(uint8_t *src, float* dst, int src_w, int src_h, const cv::Rect& rect, const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream,
+// double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,double m9) {
+//     nvocdr::ROI roi{
+//       .x = rect.tl().x, .y = rect.tl().y, .width = rect.size().width, .height = rect.size().height};
+//   dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
+//   dim3 grid(divUp(roi.width, BLOCK_SIZE_X), divUp(roi.height, BLOCK_SIZE_Y));
+//   fused_preprocess_warp_perspective_kernel<true, false, true><<<grid, block, 0, stream>>>(src, dst,
+//       src_w, src_h, roi, param, m1, m2, m3, m4, m5, m6, m7, m8, m9);
+// }
+
+template <bool IN_BGR, bool OUT_BGR, bool OUT_GRAY>
+void launch_fused_warp_perspective(uint8_t* src, float* dst, const cv::Size src_size,
+                                   const cv::Size& dst_size, const COLOR_PREPROC_PARAM& param,
+                                   const cudaStream_t& stream, const cv::Mat& matrix) {
+  // todo, use better block size,  
   dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
-  dim3 grid(divUp(roi.width, BLOCK_SIZE_X), divUp(roi.height, BLOCK_SIZE_Y));
-  if (in_bgr && out_bgr) {
-    fused_preprocess_color_kernel<true, true><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, scale.width, scale.height, roi, param.rgb_scale, param.r_mean,
-        param.g_mean, param.b_mean, param.r_std, param.g_std, param.b_std);
-  } else if (!in_bgr && out_bgr) {
-    fused_preprocess_color_kernel<false, true><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, scale.width, scale.height, roi, param.rgb_scale, param.r_mean,
-        param.g_mean, param.b_mean, param.r_std, param.g_std, param.b_std);
-  } else if (in_bgr && !out_bgr) {
-    fused_preprocess_color_kernel<true, false><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, scale.width, scale.height, roi, param.rgb_scale, param.r_mean,
-        param.g_mean, param.b_mean, param.r_std, param.g_std, param.b_std);
-  } else {
-    fused_preprocess_color_kernel<false, false><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, scale.width, scale.height, roi, param.rgb_scale, param.r_mean,
-        param.g_mean, param.b_mean, param.r_std, param.g_std, param.b_std);
-  }
-}
+  dim3 grid(divUp(dst_size.width, BLOCK_SIZE_X), divUp(dst_size.height, BLOCK_SIZE_Y));
+  auto mat = reinterpret_cast<double*>(matrix.data);
 
-void launch_preprocess_gray(uint8_t* src, float* dst, int src_w, int src_h, int dst_w, int dst_h,
-                            const GRAY_PREPROC_PARAM& param, bool in_bgr,
-                            const cudaStream_t& stream) {
-  dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
-  dim3 grid(divUp(dst_w, BLOCK_SIZE_X), divUp(dst_h, BLOCK_SIZE_Y));
-  if (in_bgr) {
-    fused_preprocess_gray_kernel<true><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, dst_w, dst_h, param.gray_scale, param.mean);
-  } else {
-    fused_preprocess_gray_kernel<false><<<grid, block, 0, stream>>>(
-        src, dst, src_w, src_h, dst_w, dst_h, param.gray_scale, param.mean);
-  }
+  fused_preprocess_warp_perspective_kernel<IN_BGR, OUT_BGR, OUT_GRAY><<<grid, block, 0, stream>>>(
+      src, dst, src_size.width, src_size.height, dst_size.width, dst_size.height, param, mat[0],
+      mat[1], mat[2], mat[3], mat[4], mat[5], mat[6], mat[7], mat[8]);
 }
+template void launch_fused_warp_perspective<true, true, false>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
+template void launch_fused_warp_perspective<true, false, false>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
+template void launch_fused_warp_perspective<false, true, false>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
+template void launch_fused_warp_perspective<false, false, false>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
 
-void launch_fused_preprocess_warp_perspective_gray(uint8_t *src, float* dst, int src_w, int src_h, int dst_w, int dst_h, int tl_x, int tl_y, float gray_scale, float mean, const cudaStream_t& stream,
-double m1,double m2,double m3,double m4,double m5,double m6,double m7,double m8,double m9) {
-  dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
-  // dim3 grid(1, 1);
-  dim3 grid(divUp(dst_w, BLOCK_SIZE_X), divUp(dst_h, BLOCK_SIZE_Y));
-  // std::cout<< matrix.mat[0] << " " << matrix.mat[8];
-  fused_preprocess_warp_perspective_gray_kernel<true><<<grid, block, 0, stream>>>(src, dst,  
-  src_w, src_h, dst_w, dst_h, tl_x, tl_y, gray_scale, mean, m1, m2, m3, m4, m5, m6, m7, m8, m9);
+template void launch_fused_warp_perspective<true, false, true>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
 
-  
-}
+template void launch_fused_warp_perspective<false, false, true>(
+    uint8_t* src, float* dst, const cv::Size src_size, const cv::Size& dst_size,
+    const COLOR_PREPROC_PARAM& param, const cudaStream_t& stream, const cv::Mat& matrix);
 }  // namespace nvocdr

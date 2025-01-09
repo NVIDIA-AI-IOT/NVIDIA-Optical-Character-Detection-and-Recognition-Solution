@@ -16,7 +16,9 @@ public:
     }
 };
 
-
+/**
+ * simple timer for profile usage
+ */
 template<size_t HistorySize>
 class Timer{
 public:

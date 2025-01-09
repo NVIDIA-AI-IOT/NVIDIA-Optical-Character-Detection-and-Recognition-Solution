@@ -34,14 +34,11 @@ inline std::ostream& operator<<(std::ostream& o, const Dims& dims) {
 template <typename T>
 using TRTUniquePtr = std::unique_ptr<T, InferDeleter>;
 
-// template <typename Param>
 class TRTEngine {
  public:
   
   TRTEngine(const char name[], const std::string& model_file, 
-            size_t batch_size) : mName(name), mModelPath(model_file), mBatchSize(batch_size) {
-    
-  };
+            size_t batch_size) : mName(name), mModelPath(model_file), mBatchSize(batch_size) {};
 
   // bool init();
   bool initEngine();
@@ -54,9 +51,7 @@ class TRTEngine {
 
   inline std::string getBufName(const std::string& name) { return mName + "_" + name; }
   inline size_t getBatchSize() { return mBatchSize; }
-  // nvinfer1::Dims getOutputDims(const std::string& name);
-  // nvinfer1::Dims getInputDims(const std::string& name);
-  nvinfer1::Dims getbindingDims(bool is_input, const std::string& name);
+  nvinfer1::Dims getBindingDims(bool is_input, const std::string& name);
 
 //  protected:
   void setupInput(const std::string& input_name, const Dims& dims, bool host_buf = false, void* device_ptr = nullptr);
@@ -83,8 +78,4 @@ class TRTEngine {
   std::map<std::string, nvinfer1::Dims> mInputDims;
   std::map<std::string, nvinfer1::Dims> mOutputDims;
 };
-
-// using OCRTRTEngine = TRTEngine<nvOCRParam>;
-// using OCDTRTEngine = TRTEngine<nvOCDParam>;
-
 }  // namespace nvocdr

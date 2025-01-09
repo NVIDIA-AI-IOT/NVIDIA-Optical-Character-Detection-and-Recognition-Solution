@@ -20,15 +20,6 @@ class Logger : public ILogger {
   }
 } logger;
 
-// template <typename Param>
-// bool TRTEngine<Param>::init() {
-//   initEngine();
-//   customInit();
-//   postInit();
-//   return true;
-// }
-
-
 bool TRTEngine::postInit() {
   for (auto const& name : mOutputNames) {
     if (!mBufManager.checkBufferExist(getBufName(name))) {
@@ -145,7 +136,7 @@ bool TRTEngine::syncMemory(bool input, bool host2device, const cudaStream_t& str
   return true;
 }
 
-nvinfer1::Dims TRTEngine::getbindingDims(bool is_input, const std::string& name) {
+nvinfer1::Dims TRTEngine::getBindingDims(bool is_input, const std::string& name) {
   const std::map<std::string, nvinfer1::Dims>* binding_set = nullptr;
   if (is_input) {
     binding_set = &mInputDims;

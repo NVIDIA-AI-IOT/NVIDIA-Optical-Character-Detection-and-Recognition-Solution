@@ -34,15 +34,17 @@ int main(int argc, char** argv) {
     
     for(int i = 0;i < 0; ++i) { 
       const auto output = sample.infer(origin_image);
+      auto const viz = sample.visualize(origin_image, output);
+      cv::imwrite(dir_path / (viz_name  + "_result.jpg"), viz);
     }
-    //     for (size_t i = 0; i < output.num_texts;++i) {
-    //         std::cout<< std::string(output.texts[i].text) << ",";
-    //         for(size_t j = 0; j < 8; ++j) {
-    //             std::cout<< output.texts[i].polygon[j];
-    //             if(j != 7) std::cout<<":";
-    //         }
-    //         std::cout<<"\n";
-    //     }
+    // //     for (size_t i = 0; i < output.num_texts;++i) {
+    // //         std::cout<< std::string(output.texts[i].text) << ",";
+    // //         for(size_t j = 0; j < 8; ++j) {
+    // //             std::cout<< output.texts[i].polygon[j];
+    // //             if(j != 7) std::cout<<":";
+    // //         }
+    // //         std::cout<<"\n";
+    // //     }
     
     sample.printStat();
 
