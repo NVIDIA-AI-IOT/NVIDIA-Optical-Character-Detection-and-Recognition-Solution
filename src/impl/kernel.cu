@@ -120,6 +120,7 @@ __global__ void fused_preprocess_warp_perspective_kernel(uint8_t* src, float* ds
                                                          double m9) {
   const int dst_x = blockIdx.x * blockDim.x + threadIdx.x;
   const int dst_y = blockIdx.y * blockDim.y + threadIdx.y;
+
   if (dst_x < dst_w && dst_y < dst_h) {
     float src_x = m1 * dst_x + m2 * dst_y + m3;
     float src_y = m4 * dst_x + m5 * dst_y + m6;
@@ -208,6 +209,8 @@ void launch_fused_warp_perspective(uint8_t* src, float* dst, const cv::Size src_
   // todo, use better block size,  
   dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);  // 1024
   dim3 grid(divUp(dst_size.width, BLOCK_SIZE_X), divUp(dst_size.height, BLOCK_SIZE_Y));
+
+
   auto mat = reinterpret_cast<double*>(matrix.data);
 
   fused_preprocess_warp_perspective_kernel<IN_BGR, OUT_BGR, OUT_GRAY><<<grid, block, 0, stream>>>(

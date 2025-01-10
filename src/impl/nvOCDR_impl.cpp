@@ -238,14 +238,14 @@ void nvOCDR::postprocessOCDTile(size_t start, size_t end) {
     output_buf += mOCDProcessor->getOutputChannels() * output_h * output_w;
 
     if (mParam.process_param.debug_image) {
-      cv::imwrite("tile_" + std::to_string(i) + ".png", score * 200);
+      cv::imwrite("tile_res_" + std::to_string(i) + ".png", score * 200);
     }
   }
 }
 
 void nvOCDR::preprocessOCDTileGPU(size_t start, size_t end) {
-  cv::Size2f scale(static_cast<float>(mRawInputSize.width) / mDestinateSize.width,
-                   static_cast<float>(mRawInputSize.height) / mDestinateSize.height);
+  cv::Size2f scale(static_cast<float>(mRawInputSize.width) / static_cast<float>(mDestinateSize.width),
+                   static_cast<float>(mRawInputSize.height) / static_cast<float>(mDestinateSize.height));
   const auto output_h = mOCDInputSize.height;
   const auto output_w = mOCDInputSize.width;
 
@@ -263,14 +263,32 @@ void nvOCDR::preprocessOCDTileGPU(size_t start, size_t end) {
       launch_fused_warp_perspective<true, true, false>(
           static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
           static_cast<float*>(mBufManager.getBuffer(mOCDProcessor->getInputBufName(), DEVICE)) + 3 * output_w * output_h * (i - start),
-          mRawInputSize, tile.size(),
+          mRawInputSize, mOCDInputSize,
           OCD_NORMAL_PREPROR_PARAM, mStream, h_inv);
     } else if (mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_MIXNET) {
       launch_fused_warp_perspective<true, false, false>(
           static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
           static_cast<float*>(mBufManager.getBuffer(mOCDProcessor->getInputBufName(), DEVICE)) + 3 * output_w * output_h * (i - start),
-          mRawInputSize, tile.size(),
+          mRawInputSize, mOCDInputSize,
           OCD_MIXNET_PREPROR_PARAM, mStream, h_inv);
+    }
+  }
+  if (mParam.process_param.debug_image) {
+    mBufManager.copyDeviceToHost(mOCDProcessor->getInputBufName(), mStream);
+    float* buff = (float*)mBufManager.getBuffer(mOCDProcessor->getInputBufName(), HOST);
+
+    for (size_t i = start; i < end; ++i) {
+      cv::Mat r(output_h, output_w, CV_32F, buff);
+      cv::Mat g(output_h, output_w, CV_32F, buff + 1 * output_w * output_h);
+      cv::Mat b(output_h, output_w, CV_32F, buff + 2 * output_w * output_h);
+      cv::Mat debug;
+      cv::merge(std::vector<cv::Mat>{r, g, b}, debug);
+      buff += 3 * output_w * output_h;
+      if (mParam.ocd_param.type == nvOCDParam::OCD_MODEL_TYPE::OCD_MODEL_TYPE_NORMAL) {
+        cv::imwrite("tile_" + std::to_string(i) + ".png", denormalizeRGB(debug, OCD_NORMAL_PREPROR_PARAM));
+      } else {
+        cv::imwrite("tile_" + std::to_string(i) + ".png", denormalizeRGB(debug, OCD_MIXNET_PREPROR_PARAM));
+      }
     }
   }
 }
@@ -314,7 +332,7 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
           static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
           static_cast<float*>(mBufManager.getBuffer(mOCRProcessor->getInputBufName(), DEVICE)) + 3 * ocr_input_w * ocr_input_h * (i - start),
           mRawInputSize, {ocr_input_w, ocr_input_h},
-          OCD_NORMAL_PREPROR_PARAM, mStream, h_inv);
+          OCR_PREPROC_CLIP_PARAM, mStream, h_inv);
     } else {
       launch_fused_warp_perspective<true, false, true>(
           static_cast<uint8_t*>(mBufManager.getBuffer(ORIGIN_INPUT_BUF, DEVICE)),
@@ -338,7 +356,7 @@ void nvOCDR::preprocessOCR(size_t start, size_t end, size_t bl_pt_idx) {
         buff += 3 * ocr_input_w * ocr_input_h;
         
         cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",
-                    denormalizeRGB(debug_text, OCD_NORMAL_PREPROR_PARAM));
+                    denormalizeRGB(debug_text, OCR_PREPROC_CLIP_PARAM));
       } else {
         cv::Mat debug_text(ocr_input_h, ocr_input_w, CV_32F, buff + ocr_input_w * ocr_input_h * (i - start));
         cv::imwrite("text_" + std::to_string(i) + "_" + std::to_string(bl_pt_idx) + ".png",

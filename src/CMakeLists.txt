@@ -18,8 +18,8 @@ endforeach()
 
 
 # impl/nvOCDR.cpp 
-file(GLOB NVOCDR_SRC nvocdr.cpp impl/TRTEngine.cpp impl/OCRProcessor.cpp impl/base.cpp impl/nvOCDR_impl.cpp impl/OCDProcessor.cpp impl/MemManager.cpp impl/kernel.cu)
-# file(GLOB NVOCDR_SRC nvocdr.cpp impl/*.cpp impl/*.cu)
+# file(GLOB NVOCDR_SRC nvocdr.cpp impl/TRTEngine.cpp impl/OCRProcessor.cpp impl/base.cpp impl/nvOCDR_impl.cpp impl/OCDProcessor.cpp impl/MemManager.cpp impl/kernel.cu)
+file(GLOB NVOCDR_SRC nvocdr.cpp impl/*.cpp impl/*.cu)
 # file(GLOB NVOCDR_SRC impl/*.cpp impl/*.cu )
 
 add_library(nvocdr SHARED ${NVOCDR_SRC})

@@ -98,6 +98,7 @@ namespace nvocdr
         ("max_candidates", po::value<size_t>(&mParam.process_param.max_candidate)->default_value(100), "maximuam texts to output, if detects exceed this value, lower score ones will be ignored")
         ("ocd_model", po::value<std::string>(), "optical charactor detection model, onnx or engine")
         ("ocr_model", po::value<std::string>(), "optical charactor recognition model, onnx or engine")
+        ("clip_vocab_file", po::value<std::string>(), "clip model vocab file")
         ("ocr_dicts", po::value<std::string>()->default_value("default"), "dictionary for ocr model, txt file. if 'default' was given, use 0-9a-z")
         ("ocr_type", po::value<std::string>()->default_value("CTC"), "the model type you set for ocr_model, choose from CTC/ATTN/CLIP")
         ("ocd_type", po::value<std::string>()->default_value("normal"), "the model type you set for ocd_model, choose from normal/mixnet")
@@ -129,6 +130,8 @@ namespace nvocdr
           std::cerr << "parse failed for ocr_dicts";
           return false;
         }
+
+        parseStrArgs(vm, "clip_vocab_file", mParam.ocr_param.vocab_file);
 
         // strategy
         auto strategy = vm["strategy"].as<std::string>();

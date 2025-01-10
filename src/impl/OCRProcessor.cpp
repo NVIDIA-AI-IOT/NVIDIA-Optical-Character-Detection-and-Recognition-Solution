@@ -32,7 +32,7 @@ size_t OCRProcessor::getBatchSize() {
 };
 
 bool OCRProcessor::init() {
-  mDict.clear();
+//   mDict.clear();
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
     initCTC();
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
@@ -45,11 +45,11 @@ bool OCRProcessor::init() {
     throw std::runtime_error("Unsupported model type");
   }
 
-  std::stringstream ss;
-  for (auto const& c : mDict) {
-    ss << c << ", ";
-  }
-  LOG(INFO) << "dict: " << ss.str();
+//   std::stringstream ss;
+//   for (auto const& c : mDict) {
+//     ss << c << ", ";
+//   }
+//   LOG(INFO) << "dict: " << ss.str();
 
   return true;
 }
@@ -88,14 +88,14 @@ void OCRProcessor::initCTC() {
   LOG(INFO) << "decode length: " << mOutputCharLength;
 
   // init dict
-  mDict.emplace_back("CTCBlank");
-  loadDict();
+//   mDict.emplace_back("CTCBlank");
+//   loadDict();
 }
 
 void OCRProcessor::initATTN() {
-    mDict.emplace_back("[GO]");
-    mDict.emplace_back("[s]");
-    loadDict();
+    // mDict.emplace_back("[GO]");
+    // mDict.emplace_back("[s]");
+    // loadDict();
 }
 
 void OCRProcessor::initCLIP() {
@@ -129,57 +129,62 @@ void OCRProcessor::initCLIP() {
     mEngines[CLIP_TEXT_MODEL]->postInit();
 
 
-    mDict.emplace_back("[E]");
-    loadDict();
-    mDict.emplace_back("[B]");
-    mDict.emplace_back("[P]");
+    // mDict.emplace_back("[E]");
+    // loadDict();
+    // mDict.emplace_back("[B]");
+    // mDict.emplace_back("[P]");
 
-    auto batch_size = getBatchSize();
     auto clip_prob_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_PROBS);
     mOutputCharLength = clip_prob_dim.d[1];
     mClipCharTypeSize = clip_prob_dim.d[2];
+    mClipEmbedingSize = mEngines[CLIP_TEXT_MODEL]->getBindingDims(true, CLIP_TEXT_INPUT_TEXT_TOKEN).d[1];
 
-    mTmpText.resize(batch_size);
-    for(size_t i = 0; i < batch_size;++i ) {
-        mTmpText[i].resize(mOutputCharLength);
-    }
+    mTmpText.resize(getBatchSize());
+    mTmpScore.resize(getBatchSize());
     LOG(INFO) << "init CLIP visual temp space " << mOutputCharLength << "x" << mClipCharTypeSize;
+
+    mTokenizer = std::make_unique<BPETokenizer>(mParam.vocab_file, CLIP_VOCAB_SIZE);
     // LOG(INFO) << "clip dict: " << CLIP_DICT;
 }
 
 
-void OCRProcessor::loadDict() {
-  LOG(INFO) << "reading dict from: " << mParam.dict;
-  if (std::string(mParam.dict) == "default") {
-    LOG(INFO) << "using default 0-9a-z as dictionary";
-    for (size_t i = 0; i <= 9; ++i) {
-      mDict.emplace_back(std::to_string(i));
-    }
+// void OCRProcessor::loadDict() {
+//   LOG(INFO) << "reading dict from: " << mParam.dict;
+//   if (std::string(mParam.dict) == "default") {
+//     LOG(INFO) << "using default 0-9a-z as dictionary";
+//     for (size_t i = 0; i <= 9; ++i) {
+//       mDict.emplace_back(std::to_string(i));
+//     }
 
-    for (size_t i = 0; i < 26; i++) {
-      mDict.emplace_back(1, i + 'a');
-    }
-  } else {
-    std::ifstream dict_file(mParam.dict);
+//     for (size_t i = 0; i < 26; i++) {
+//       mDict.emplace_back(1, i + 'a');
+//     }
+//   } else {
+//     std::ifstream dict_file(mParam.dict);
 
-    if (!dict_file.good()) {
-      LOG(INFO) << "[ERROR] Error reading OCRNet dict file " << mParam.dict << std::endl;
-    }
-    while (!dict_file.eof()) {
-      std::string ch;
-      if (getline(dict_file, ch)) {
-        mDict.emplace_back(ch);
-      }
-    }
-  }
-}
+//     if (!dict_file.good()) {
+//       LOG(INFO) << "[ERROR] Error reading OCRNet dict file " << mParam.dict << std::endl;
+//     }
+//     while (!dict_file.eof()) {
+//       std::string ch;
+//       if (getline(dict_file, ch)) {
+//         mDict.emplace_back(ch);
+//       }
+//     }
+//   }
+// }
 
 void OCRProcessor::decode(Text* const text, size_t idx) {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CTC) {
     decodeCTC(text, idx);
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_ATTN) {
     // decodeATTNOrCLIP(text, idx, "[s]");
+
   } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
+    memcpy(text->text, mTmpText[idx].c_str(), mTmpText[idx].length());
+    text->text[mTmpText[idx].length()] = '\0';
+    text->text_length = mTmpText[idx].length();
+    text->conf = mTmpScore[idx];
     // decodeATTNOrCLIP(text, idx, "[E]");
   }
 }
@@ -202,7 +207,7 @@ void OCRProcessor::decodeCTC(Text* const text, size_t idx) {
     while (j < mOutputCharLength && (cls[j] == 0 || cls[j] == cls[i])){
       j++;
     }
-    ret += mDict[cls[i]];
+    ret += DICT[cls[i] - 1];
     score *= prob[i];
     i = j - 1;
   }
@@ -221,11 +226,28 @@ bool OCRProcessor::infer(bool sync_input, const cudaStream_t& stream) {
   if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
     // clip visual infer
     mEngines[CLIP_VISUAL_MODEL]->infer(stream);
-    decodeCLIPVisual(stream);
-    // tokenizer
+    const auto visual_prob_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_PROBS);
 
+    decodeCLIP(stream, visual_prob_buf_name);
+
+    auto tok_buf_name = mEngines[CLIP_TEXT_MODEL]->getBufName(CLIP_TEXT_INPUT_TEXT_TOKEN) ;
+    auto* embeding_buf = static_cast<int*>(mBufManager.getBuffer(tok_buf_name, HOST));
+    for(size_t i = 0; i < getBatchSize(); ++i) {
+            // tokenizer
+    mTokenizer->encode(mTmpText[i], mClipEmbedingSize, embeding_buf);
+    //   std::stringstream ss;
+    //   for(size_t j = 0; j < mClipEmbedingSize; ++j) {
+    //     ss <<" "<< embeding_buf[j];
+    //   }
+    //   LOG(INFO) << ss.str();
+      embeding_buf += mClipEmbedingSize;
+    }
+    mBufManager.copyHostToDevice(tok_buf_name, stream);  
     // clip text infer
     mEngines[CLIP_TEXT_MODEL]->infer(stream);
+    const auto text_prob_buf_name = mEngines[CLIP_TEXT_MODEL]->getBufName(CLIP_TEXT_OUTPUT_LOGITS);
+    decodeCLIP(stream, text_prob_buf_name);
+
   } else {
     BaseProcessor<nvOCRParam>::infer(sync_input, stream);
   } 
@@ -233,14 +255,14 @@ bool OCRProcessor::infer(bool sync_input, const cudaStream_t& stream) {
 };
 
 // inline fi
-void OCRProcessor::decodeCLIPVisual(const cudaStream_t& stream) {
-  const auto prob_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_PROBS);
-  mBufManager.copyDeviceToHost(prob_buf_name, stream);  
-  auto* prob = static_cast<float*>(mBufManager.getBuffer(prob_buf_name, HOST));
+void OCRProcessor::decodeCLIP(const cudaStream_t& stream, const std::string& buf_name) {
+  mBufManager.copyDeviceToHost(buf_name, stream);  
+  auto* prob = static_cast<float*>(mBufManager.getBuffer(buf_name, HOST));
   
   auto batch_size = getBatchSize();
   
   for(size_t i = 0; i < batch_size; ++i) {
+    float acc_prob = 1;
     for(size_t j = 0; j < mOutputCharLength; ++j) {
         float max_prob = -1;
         size_t max_idx = 0;
@@ -252,9 +274,13 @@ void OCRProcessor::decodeCLIPVisual(const cudaStream_t& stream) {
             max_idx = t;
           }
         }
-        mTmpText[i][j] = CLIP_CHAR[max_idx];
+        if (max_idx == 0) break;
+        acc_prob *= max_prob;
+        mTmpText[i] += DICT[max_idx - 1];
     }
-    LOG(INFO) << std::string(mTmpText[i].begin(), mTmpText[i].end());
+    mTmpScore[i] = acc_prob;
+    // LOG(INFO) << mTmpText[i];
+    // break;
   }
 
 }

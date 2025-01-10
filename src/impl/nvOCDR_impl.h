@@ -19,6 +19,7 @@
 namespace nvocdr {
 static constexpr float IMG_MEAN_GRAY = 127.5;
 static constexpr float IMG_SCALE_GRAY = 0.00784313;
+
 static constexpr float IMG_MEAN_B = 0.4078705409019608;
 static constexpr float IMG_MEAN_G = 0.4575245789019608;
 static constexpr float IMG_MEAN_R = 0.4810937817254902;
@@ -30,7 +31,14 @@ static constexpr float IMG_MEAN_B_MIXNET = 0.406;
 static constexpr float IMG_MEAN_R_STD_MIXNET = 0.229;
 static constexpr float IMG_MEAN_G_STD_MIXNET = 0.224;
 static constexpr float IMG_MEAN_B_STD_MIXNET = 0.225;
-static constexpr float IMG_SCALE_BRG = 0.00392156;
+
+static constexpr float IMG_MEAN_R_CLIP = 0.4814546;
+static constexpr float IMG_MEAN_G_CLIP = 0.4578275;
+static constexpr float IMG_MEAN_B_CLIP = 0.4082107;
+
+static constexpr float IMG_MEAN_R_STD_CLIP = 0.26862954;
+static constexpr float IMG_MEAN_G_STD_CLIP = 0.26130258;
+static constexpr float IMG_MEAN_B_STD_CLIP = 0.27577711;
 
 static constexpr size_t NUM_WARMUP_RUNS = 10;
 static constexpr size_t TIME_HISTORY_SIZE = 100;
@@ -65,10 +73,20 @@ static constexpr COLOR_PREPROC_PARAM OCR_PREPROC_GRAY_PARAM {
   .r_mean = IMG_MEAN_GRAY
 };
 
+static constexpr COLOR_PREPROC_PARAM OCR_PREPROC_CLIP_PARAM {
+    .rgb_scale = 255.F,
+    .r_mean = IMG_MEAN_R_CLIP,
+    .g_mean = IMG_MEAN_G_CLIP,
+    .b_mean = IMG_MEAN_B_CLIP,
+    .r_std = IMG_MEAN_R_STD_CLIP,
+    .g_std = IMG_MEAN_G_STD_CLIP,
+    .b_std = IMG_MEAN_B_STD_CLIP
+};
+
 enum INPUT_NORM_STYLE {
   INPUT_NORM_STYLE_MIXNET, // rgb + its only mean + std
   INPUT_NORM_STYLE_DCN, // bgr + its only mean + std=1
-  INPUT_NORM_STYLE_CLIP, // ??
+  INPUT_NORM_STYLE_CLIP, // rgb + its only mean + std
   INPUT_NORM_STYLE_GRAY, // gray + normalized
 };
 
