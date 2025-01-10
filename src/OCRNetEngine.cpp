@@ -55,7 +55,7 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         // init text engine of CLIP4STR
         mTextEngine = std::move(std::unique_ptr<TRTEngine>(new TRTEngine(text_engine_path)));
         // vocab file
-        mTokenizer.initTokenizer(vocab_file, vocab_size);
+        mTokenizer = std::move(std::unique_ptr<SimpleTokenizer>(new SimpleTokenizer(vocab_file, vocab_size)));
     }
 
     mUDFlag = upside_down;
@@ -245,15 +245,15 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
         {
             std::pair<std::string, float> de_text_prob = clip4strDecode(output_prob, batch_idx, context_max_length, charset_len);
             // batch_captions.emplace_back(de_text);
-            std::vector<int> text_tokens = mTokenizer.encode(de_text_prob.first);
-            text_tokens.insert(text_tokens.begin(), mTokenizer.getStartTextToken());
-            text_tokens.push_back(mTokenizer.getEndTextToken());
+            std::vector<int> text_tokens = mTokenizer->encode(de_text_prob.first);
+            text_tokens.insert(text_tokens.begin(), mTokenizer->getStartTextToken());
+            text_tokens.push_back(mTokenizer->getEndTextToken());
 
             std::vector<int> truncated_text_tokens(mMaxContextLen,0);
             if (text_tokens.size() > mMaxContextLen)
             {
                 std::copy(text_tokens.begin(), text_tokens.begin() + mMaxContextLen, truncated_text_tokens.begin());
-                truncated_text_tokens.back() = mTokenizer.getEndTextToken();
+                truncated_text_tokens.back() = mTokenizer->getEndTextToken();
             }
             else
             {

@@ -65,8 +65,6 @@ typedef struct
   bool ocrnet_only_lowercase = false;
   char* ocrnet_vocab_file;
   int ocrnet_vocab_size = 32000;
-  // char* charset_train = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-  // char* charset_test = "0123456789abcdefghijklmnopqrstuvwxyz";
   // common param
 
 } nvOCDRParam;
