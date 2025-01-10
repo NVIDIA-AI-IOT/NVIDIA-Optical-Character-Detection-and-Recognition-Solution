@@ -8,6 +8,7 @@
 #include <cuda_runtime.h>
 #include "nvocdr.h"
 #include "MemManager.h"
+#include "OCRNetNvCLIP4STREngine.h"
 #include "OCRNetEngine.h"
 #include "OCDNetEngine.h"
 #include "RectEngine.h"
@@ -56,7 +57,8 @@ class nvOCDR
         std::unique_ptr<OCDNetEngine> mOCDNet;
         Dims mOCDNetInputShape;
         int32_t mOCDNetMaxBatch;
-        std::unique_ptr<OCRNetEngine> mOCRNet;
+        // std::unique_ptr<OCRNetEngine> mOCRNet;
+        std::unique_ptr<OCRNetBaseEngine> mOCRNet;
         Dims mOCRNetInputShape;
         int32_t mOCRNetMaxBatch;
         std::unique_ptr<RectEngine> mRect;

@@ -81,7 +81,7 @@ int main()
     param.ocdnet_infer_input_shape[2] = 1280;
     param.ocdnet_binarize_threshold = 0.1;
     param.ocdnet_polygon_threshold = 0.3;
-    param.ocdnet_max_candidate = 200;
+    param.ocdnet_max_candidate = 500;
     param.ocdnet_unclip_ratio = 1.5;
     param.ocrnet_trt_engine_path = (char *)"/home/binz/CLIP4STR_nvCLIP/trained_with_nvclip/best_ckpt/vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.visual.sim.fp16.engine";
     param.ocrnet_text_trt_engine_path = (char *)"/home/binz/CLIP4STR_nvCLIP/trained_with_nvclip/best_ckpt/vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.text.sim.fp16.engine";

@@ -301,6 +301,7 @@ nvOCDR::nvOCDR(nvOCDRParam param):
     bool only_alnum = true;
     bool only_lowercase = true;
     int vocab_size = 0;
+    std::string ocr_dict_path(param.ocrnet_dict_file);
     if (param.ocrnet_decode == OCRNetDecode::Transformer)
     {
         ocr_text_engine_path = std::string(param.ocrnet_text_trt_engine_path);
@@ -308,17 +309,24 @@ nvOCDR::nvOCDR(nvOCDRParam param):
         only_lowercase = param.ocrnet_only_lowercase;
         vocab_file = std::string(param.ocrnet_vocab_file);
         vocab_size = param.ocrnet_vocab_size;
+        mOCRNet = std::move(std::unique_ptr<OCRNetNvCLIP4STREngine>(new OCRNetNvCLIP4STREngine(ocr_engine_path,
+                                                                        ocr_dict_path,
+                                                                        upsidedown,
+
+                                                                        ocr_text_engine_path,
+                                                                        only_alnum,
+                                                                        only_lowercase,
+                                                                        vocab_file,
+                                                                        vocab_size)));
     }
-    std::string ocr_dict_path(param.ocrnet_dict_file);
-    mOCRNet = std::move(std::unique_ptr<OCRNetEngine>(new OCRNetEngine(ocr_engine_path,
+    else
+    {
+        mOCRNet = std::move(std::unique_ptr<OCRNetEngine>(new OCRNetEngine(ocr_engine_path,
                                                                        ocr_dict_path,
                                                                        upsidedown,
-                                                                       decode_mode,
-                                                                       ocr_text_engine_path,
-                                                                       only_alnum,
-                                                                       only_lowercase,
-                                                                       vocab_file,
-                                                                       vocab_size)));
+                                                                       decode_mode)));
+    }
+    
     // Init input and output buffer for OCRNet TRT inference
     mOCRNet->initTRTBuffer(mBuffMgr);
     mOCRNetInputShape.nbDims = 4;
