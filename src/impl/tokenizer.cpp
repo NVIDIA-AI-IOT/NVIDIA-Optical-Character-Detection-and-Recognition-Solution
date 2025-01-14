@@ -156,7 +156,7 @@ void BPETokenizer::encode(const std::string& input, size_t max_len, int* dst) {
     }
     size_t n = text.size();
     text += "</w>";
-    LOG(INFO) << "encode for " << text;
+    // LOG(INFO) << "encode for " << text;
 
     std::vector<size_t> pairs(n + 1);
     size_t num_pairs = n;

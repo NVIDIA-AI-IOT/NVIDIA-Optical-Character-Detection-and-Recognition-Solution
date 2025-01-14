@@ -185,6 +185,7 @@ void OCDProcessor::computeTextCandidatesMixNet(const cv::Mat& mask,
                                                std::vector<QUADANGLE>* const quads,
                                                std::vector<Text>* const texts, size_t* num_text,
                                                const ProcessParam& process_param) {
+  // todo(shuohanc) 
   float resize_ratio = 0.4;
 
   cv::Mat resized;

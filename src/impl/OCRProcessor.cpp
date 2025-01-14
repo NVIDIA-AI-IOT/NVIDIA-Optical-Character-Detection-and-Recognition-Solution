@@ -263,6 +263,7 @@ void OCRProcessor::decodeCLIP(const cudaStream_t& stream, const std::string& buf
   
   for(size_t i = 0; i < batch_size; ++i) {
     float acc_prob = 1;
+    mTmpText[i].clear();
     for(size_t j = 0; j < mOutputCharLength; ++j) {
         float max_prob = -1;
         size_t max_idx = 0;
