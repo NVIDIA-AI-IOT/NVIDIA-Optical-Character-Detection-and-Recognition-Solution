@@ -1,0 +1,20 @@
+runtime: "libtriton_nvocdr.so"
+backend: "nvocdr"
+input [
+    {
+        name: "INPUT_DATA"
+        data_type: TYPE_STRING
+        dims: [ -1 ]
+    }    
+]
+     
+output [
+    {
+        name: "OUTPUT_TEXT_AND_BOX"
+        data_type: TYPE_STRING
+        dims: [ -1 ]
+    }
+]
+    
+    
+    

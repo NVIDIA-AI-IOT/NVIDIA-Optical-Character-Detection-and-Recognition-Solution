@@ -1,4 +1,0 @@
-pynvjpeg
-pybind11
-opencv-python
-pycuda==2022.2.2

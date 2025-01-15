@@ -6,8 +6,7 @@ namespace py = pybind11;
 using namespace nvocdr;
 PYBIND11_MODULE(nvocdr_python, m) {
     m.doc() = "nvocdr python binding";
-
-    
+ 
     py::class_<nvOCDRWarp>(m, "nvOCDRWarp")
         .def(py::init<const nvOCDParam&, const nvOCRParam &, const ProcessParam&, const std::string&,const std::string&,const std::vector<size_t> &>())
         .def("warpInfer", &nvOCDRWarp::warpInfer)
