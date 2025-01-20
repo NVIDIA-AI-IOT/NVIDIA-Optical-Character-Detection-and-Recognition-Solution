@@ -36,7 +36,7 @@ enum OCRNetDecode
 {
   CTC,
   Attention,
-  CLIP
+  Transformer
 };
 
 typedef struct
@@ -58,7 +58,13 @@ typedef struct
   char* ocrnet_trt_engine_path;
   char* ocrnet_dict_file;
   int32_t ocrnet_infer_input_shape[3];
-  OCRNetDecode ocrnet_decode = CTC;
+  OCRNetDecode ocrnet_decode = Transformer;
+  // Param for clip4str
+  char* ocrnet_text_trt_engine_path;
+  bool ocrnet_only_alnum = false;
+  bool ocrnet_only_lowercase = false;
+  char* ocrnet_vocab_file;
+  int ocrnet_vocab_size = 32000;
   // common param
 
 } nvOCDRParam;

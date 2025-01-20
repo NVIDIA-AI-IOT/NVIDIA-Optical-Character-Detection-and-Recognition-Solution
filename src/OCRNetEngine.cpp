@@ -7,7 +7,7 @@
 using namespace nvocdr;
 
 
-OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& dict_path, const bool upside_down, const DecodeMode decode_mode)
+OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& dict_path, const bool upside_down=0, const DecodeMode decode_mode=Attention)   
 {
     // Init TRTEngine
     mEngine = std::move(std::unique_ptr<TRTEngine>(new TRTEngine(engine_path)));
@@ -29,10 +29,6 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         mDict.emplace_back("[GO]");
         mDict.emplace_back("[s]");
     }
-    else if (mDecodeMode == CLIP)
-    {
-        mDict.emplace_back("[E]");
-    } 
     else
     {
         std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
@@ -47,14 +43,7 @@ OCRNetEngine::OCRNetEngine(const std::string& engine_path, const std::string& di
         }
     }
 
-    if (mDecodeMode == CLIP)
-    {
-        mDict.emplace_back("[B]");
-        mDict.emplace_back("[P]");
-    }
-
     mUDFlag = upside_down;
-
 }
 
 
@@ -74,6 +63,8 @@ OCRNetEngine::initTRTBuffer(BufferManager& buffer_mgr)
     // Init trt output gpu buffer
     mTRTOutputBufferIndex = buffer_mgr.initDeviceBuffer(mEngine->getMaxOutputBufferSize(), sizeof(float));
     mEngine->setOutputBuffer(buffer_mgr.mDeviceBuffer[mTRTOutputBufferIndex].data());
+
+
 
     return 0;
 }
@@ -109,18 +100,16 @@ bool
 OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string, float>>& de_texts, const cudaStream_t& stream)
 {
 
-    // Preprocess:
-    // unsigned int item_cnt = volume(mEngine->getExactInputShape());
-    // float mean = 127.5;
-    // float scale = 0.00784313;
-    // subscal(item_cnt, buffer_mgr.mDeviceBuffer[mTRTInputBufferIndex].data(), scale, mean, stream);
 
+    int batch_size = 0;
+    std::vector<std::pair<std::string, float>> temp_de_texts;
     mEngine->infer(stream);
+    
 
     // CPU Decode:
     Dims output_prob_shape = mEngine->getExactOutputShape(OCRNET_OUTPUT_PROB);
     Dims output_id_shape = mEngine->getExactOutputShape(OCRNET_OUTPUT_ID);
-    int batch_size = output_prob_shape.d[0];
+    batch_size = output_prob_shape.d[0];
     int output_len = output_prob_shape.d[1];
 
     std::vector<float> output_prob(volume(output_prob_shape));
@@ -131,7 +120,7 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
                     output_id.size() * sizeof(int), cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
 
-    std::vector<std::pair<std::string, float>> temp_de_texts;
+
     if (mDecodeMode == CTC)
     {
         for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
@@ -192,28 +181,6 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
             temp_de_texts.emplace_back(std::make_pair(de_text, prob));
         }
     }
-    else if (mDecodeMode == CLIP)
-    {
-        for(int batch_idx = 0; batch_idx < batch_size; ++batch_idx)
-        {
-            int b_offset = batch_idx * output_len;
-            std::string de_text = "";
-            float prob = 1.0;
-
-            for(int i = 0; i < output_len; ++i)
-            {
-                if (mDict[output_id[b_offset + i]] == "[E]")
-                {
-                    break;
-                }
-                de_text += mDict[output_id[b_offset + i]];
-                prob *= output_prob[b_offset + i];
-            }
-
-            temp_de_texts.emplace_back(std::make_pair(de_text, prob));
-        }
-
-    }
     else
     {
         std::cerr << "[ERROR] Unsupported decode mode" << std::endl;
@@ -242,3 +209,6 @@ OCRNetEngine::infer(BufferManager& buffer_mgr, std::vector<std::pair<std::string
     }
     return 0;
 }
+
+
+
