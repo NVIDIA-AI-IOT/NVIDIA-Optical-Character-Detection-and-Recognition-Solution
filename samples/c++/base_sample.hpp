@@ -125,11 +125,11 @@ namespace nvocdr
           std::cerr << "parse failed for ocr_model";
           return false;
         }
-        if (!parseStrArgs(vm, "ocr_dicts", mParam.ocr_param.dict))
-        {
-          std::cerr << "parse failed for ocr_dicts";
-          return false;
-        }
+        // if (!parseStrArgs(vm, "ocr_dicts", mParam.ocr_param.dict))
+        // {
+        //   std::cerr << "parse failed for ocr_dicts";
+        //   return false;
+        // }
 
         parseStrArgs(vm, "clip_vocab_file", mParam.ocr_param.vocab_file);
 

@@ -106,7 +106,7 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   TRITONSERVER_Message* backend_config_message;
   RETURN_IF_ERROR(
       TRITONBACKEND_BackendConfig(backend, &backend_config_message));
-
+  
   const char* buffer;
   size_t byte_size;
   RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(
@@ -115,6 +115,30 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
       TRITONSERVER_LOG_INFO,
       (std::string("backend configuration:\n") + buffer).c_str());
 
+  triton::common::TritonJson::Value backend_config(triton::common::TritonJson::ValueType::OBJECT);
+  if(backend_config.Parse(buffer, byte_size) != TRITONJSON_STATUSSUCCESS) {
+      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "parse model config error");
+  }
+
+  triton::common::TritonJson::Value cmdline_config;
+  backend_config.Find("cmdline", &cmdline_config);
+
+  triton::common::TritonJson::Value spec_file_val;
+  
+  if (cmdline_config.Find("spec", &spec_file_val)) {
+      std::string spec_file;
+      spec_file_val.AsString(&spec_file);
+      LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO, ("nvocdr spec file: " + spec_file).c_str());
+      nvOCDRParam param;
+      nvOCDR_parse_param(&param, spec_file.c_str());
+      LOG_MESSAGE(
+        TRITONSERVER_LOG_ERROR, param.ocr_param.model_file
+      );
+
+  } else {
+      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "nvocdr spec file not found");
+  }
   // This backend does not require any "global" state but as an
   // example create a string to demonstrate.
   std::string* state = new std::string("backend state");

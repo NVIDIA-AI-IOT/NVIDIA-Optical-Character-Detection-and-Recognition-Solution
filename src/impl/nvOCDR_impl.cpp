@@ -45,19 +45,16 @@ void nvOCDR::process(const nvOCDRInput& input, nvOCDROutput* const output) {
 }
 
 void nvOCDR::restoreImage(const nvOCDRInput& input) {
-
   if (input.data_format == DATAFORMAT_TYPE_HWC) {
     mInputImage = cv::Mat(mRawInputSize,  CV_8UC3, input.data, cv::Mat::AUTO_STEP);
-    memcpy(mBufManager.getBuffer(ORIGIN_INPUT_BUF, HOST), mInputImage.data,
-           mInputImage.total() * mInputImage.elemSize());
-    mBufManager.copyHostToDevice(ORIGIN_INPUT_BUF, mStream);
-
   } else {
     // todo(shuohanc) restore from chw.
     LOG(ERROR) << "not implemented CHW";
     throw std::runtime_error("not implement CHW");
   }
-
+  memcpy(mBufManager.getBuffer(ORIGIN_INPUT_BUF, HOST), mInputImage.data,
+          mInputImage.total() * mInputImage.elemSize());
+  mBufManager.copyHostToDevice(ORIGIN_INPUT_BUF, mStream);
   if (mInputImage.empty()) {
     throw std::runtime_error("input empty");
   }
@@ -79,51 +76,22 @@ void nvOCDR::handleStrategy() {
     if (hw_ratio >= 0.95 && hw_ratio <= 1.05 && h_ratio >= 0.95 && h_ratio <= 1.05 &&
         w_ratio >= 0.95 && w_ratio <= 1.05) {  // approx square, also the dimension are close
       LOG_IF(ERROR, mParam.process_param.debug_log) << "resize input exact equal to model input";
-      // mResizeInfo = {
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      //     {ocd_input_w, ocd_input_h},
-      // };
       mDestinateSize = {ocd_input_w, ocd_input_h};
     } else if (hw_ratio >= 0.95 && hw_ratio <= 1.06) {  // approx square, but dimension diff a lot
-      // mResizeInfo = {
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      // };
       mDestinateSize = mRawInputSize;
     } else {
-      // mResizeInfo = {
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      // };
        mDestinateSize = mRawInputSize;
     }
   } else if (mParam.process_param.strategy == STRATEGY_TYPE_RESIZE_TILE) {
     // resize short to
     if (hw_ratio < 1) {  // h = short
-      // mResizeInfo = {
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      //     {static_cast<int>(ocd_input_h / hw_ratio), ocd_input_h},
-      // };
        mDestinateSize = {static_cast<int>(ocd_input_h / hw_ratio), ocd_input_h};
     } else {  // w = short
-      // mResizeInfo = {
-      //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-      //     {ocd_input_w, static_cast<int>(ocd_input_w * hw_ratio)},
-      // };
       mDestinateSize = {ocd_input_w, static_cast<int>(ocd_input_w * hw_ratio)};
     }
-
   } else if (mParam.process_param.strategy == STRATEGY_TYPE_NORESIZE_TILE) {
-    // mResizeInfo = {
-    //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-    //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-    // };
     mDestinateSize = mRawInputSize;
   } else if (mParam.process_param.strategy == STRATEGY_TYPE_RESIZE_FULL) {
-    // mResizeInfo = {
-    //     {static_cast<int>(mInputShape[W_IDX]), static_cast<int>(mInputShape[H_IDX])},
-    //     {static_cast<int>(ocd_input_w), static_cast<int>(ocd_input_h)},
-    // };
     mDestinateSize = {ocd_input_w, ocd_input_h};
   }
 
@@ -180,7 +148,7 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
 
   mOCDTimer.Start();
 
-  // resize image to destinate size
+  // prepare accumulated map
   mOCDScoreMap = cv::Mat::zeros(mDestinateSize, CV_32F);
   mOCDValidCntMap = cv::Mat::zeros(mDestinateSize, CV_32F);
 
@@ -188,7 +156,6 @@ void nvOCDR::processTile(const nvOCDRInput& input) {
   for (size_t i = 0; i < num_ocd_runs; i++) {
     size_t start_idx = i * num_ocd_bs;
     size_t end_idx = std::min((i + 1) * num_ocd_bs, num_tiles);
-    auto t = std::chrono::high_resolution_clock::now();
     preprocessOCDTileGPU(start_idx, end_idx);
 
     mOCDProcessor->infer(false, mStream);

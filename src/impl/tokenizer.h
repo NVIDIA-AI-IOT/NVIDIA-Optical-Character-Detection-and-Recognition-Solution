@@ -10,9 +10,6 @@
 #include <utility>
 
 namespace nvocdr {
-// static constexpr char TOKEN_REGEX[] = R"(<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[a-zA-Z]+|[0-9]+|[^\s\w]+)";
-// static constexpr char TOKEN_REGEX[] = R"(<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[a-zA-Z]+|[0-9]+|[^\s\w]+)";
-
 struct pair_hash {
   template <class T1, class T2>
   std::size_t operator()(const std::pair<T1, T2>& p) const {

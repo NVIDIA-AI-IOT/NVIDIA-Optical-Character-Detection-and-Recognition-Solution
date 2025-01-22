@@ -14,10 +14,17 @@ OCRProcessor::OCRProcessor(const nvOCRParam& param) : BaseProcessor<nvOCRParam>(
         mEngines[CTC_MODEL].reset(new TRTEngine(CTC_MODEL, model_file, mParam.batch_size));
     } else if (mParam.type == nvOCRParam::OCR_MODEL_TYPE::OCR_MODEL_TYPE_CLIP) {
         std::string model_file_packed(mParam.model_file); 
-        std::string visual_model_model_file = model_file_packed.substr(0, model_file_packed.find(','));
-        std::string text_model_model_file = model_file_packed.substr(model_file_packed.find(',') + 1);
-        mEngines[CLIP_VISUAL_MODEL].reset(new TRTEngine(CLIP_VISUAL_MODEL, visual_model_model_file, mParam.batch_size));
-        mEngines[CLIP_TEXT_MODEL].reset(new TRTEngine(CLIP_TEXT_MODEL, text_model_model_file, mParam.batch_size));
+        // if two model provided, assume they are vis + text
+        if (model_file_packed.find(',') != std::string::npos) {
+          std::string visual_model_model_file = model_file_packed.substr(0, model_file_packed.find(','));
+          std::string text_model_model_file = model_file_packed.substr(model_file_packed.find(',') + 1);
+          mEngines[CLIP_VISUAL_MODEL].reset(new TRTEngine(CLIP_VISUAL_MODEL, visual_model_model_file, mParam.batch_size));
+          mEngines[CLIP_TEXT_MODEL].reset(new TRTEngine(CLIP_TEXT_MODEL, text_model_model_file, mParam.batch_size));
+        } else {
+          // only on provided, assume is vis
+          mEngines[CLIP_VISUAL_MODEL].reset(new TRTEngine(CLIP_VISUAL_MODEL, model_file_packed, mParam.batch_size));
+        }
+
     }
 }
 size_t OCRProcessor::getBatchSize() {
@@ -100,51 +107,47 @@ void OCRProcessor::initATTN() {
 
 void OCRProcessor::initCLIP() {
     // setup engine for visual 
-    mEngines[CLIP_VISUAL_MODEL]->initEngine();
-    mEngines[CLIP_VISUAL_MODEL]->setupInput(CLIP_VISUAL_INPUT, {}, true);
-    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_PROBS, {}, true);
+    auto &vis_engine = mEngines[CLIP_VISUAL_MODEL];
 
-    auto clip_feature_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_FEATURE);
-    auto clip_id_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_ID);
-    auto clip_feature_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_FEATURE);
-    auto clip_id_buf_name = mEngines[CLIP_VISUAL_MODEL]->getBufName(CLIP_VISUAL_OUTPUT_ID);
+    vis_engine->initEngine();
+    vis_engine->setupInput(CLIP_VISUAL_INPUT, {}, true);
+    vis_engine->setupOutput(CLIP_VISUAL_OUTPUT_PROBS, {}, true);
+
+    auto clip_feature_dim = vis_engine->getBindingDims(false, CLIP_VISUAL_OUTPUT_FEATURE);
+    auto clip_id_dim = vis_engine->getBindingDims(false, CLIP_VISUAL_OUTPUT_ID);
+    auto clip_feature_buf_name = vis_engine->getBufName(CLIP_VISUAL_OUTPUT_FEATURE);
+    auto clip_id_buf_name = vis_engine->getBufName(CLIP_VISUAL_OUTPUT_ID);
 
     mBufManager.initBuffer(clip_feature_buf_name, volume(clip_feature_dim) * sizeof(float), false);
     mBufManager.initBuffer(clip_id_buf_name, volume(clip_id_dim) * sizeof(int), false);
 
     auto* feature_dev_ptr = mBufManager.getBuffer(clip_feature_buf_name, DEVICE);
     auto* id_dev_ptr = mBufManager.getBuffer(clip_id_buf_name, DEVICE);
-    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_FEATURE, {}, false, feature_dev_ptr);
-    mEngines[CLIP_VISUAL_MODEL]->setupOutput(CLIP_VISUAL_OUTPUT_ID, {}, false, id_dev_ptr);
+    vis_engine->setupOutput(CLIP_VISUAL_OUTPUT_FEATURE, {}, false, feature_dev_ptr);
+    vis_engine->setupOutput(CLIP_VISUAL_OUTPUT_ID, {}, false, id_dev_ptr);
+    vis_engine->postInit();
 
     // setup engine for text
-    mEngines[CLIP_TEXT_MODEL]->initEngine();
-    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_TEXT_TOKEN, {}, true);
-    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_FEATURE, {}, false, feature_dev_ptr);
-    mEngines[CLIP_TEXT_MODEL]->setupInput(CLIP_TEXT_INPUT_ID, {}, false, id_dev_ptr);
-    mEngines[CLIP_TEXT_MODEL]->setupOutput(CLIP_TEXT_OUTPUT_LOGITS, {}, true);
+    auto &text_engine = mEngines[CLIP_TEXT_MODEL];
+    if (text_engine) {
+      text_engine->initEngine();
+      text_engine->setupInput(CLIP_TEXT_INPUT_TEXT_TOKEN, {}, true);
+      text_engine->setupInput(CLIP_TEXT_INPUT_FEATURE, {}, false, feature_dev_ptr);
+      text_engine->setupInput(CLIP_TEXT_INPUT_ID, {}, false, id_dev_ptr);
+      text_engine->setupOutput(CLIP_TEXT_OUTPUT_LOGITS, {}, true);
+
+      text_engine->postInit();
+      mClipEmbedingSize = text_engine->getBindingDims(true, CLIP_TEXT_INPUT_TEXT_TOKEN).d[1];
+      mTokenizer = std::make_unique<BPETokenizer>(mParam.vocab_file, CLIP_VOCAB_SIZE);
+    }
 
 
-    mEngines[CLIP_VISUAL_MODEL]->postInit();
-    mEngines[CLIP_TEXT_MODEL]->postInit();
-
-
-    // mDict.emplace_back("[E]");
-    // loadDict();
-    // mDict.emplace_back("[B]");
-    // mDict.emplace_back("[P]");
-
-    auto clip_prob_dim = mEngines[CLIP_VISUAL_MODEL]->getBindingDims(false, CLIP_VISUAL_OUTPUT_PROBS);
+    auto clip_prob_dim = vis_engine->getBindingDims(false, CLIP_VISUAL_OUTPUT_PROBS);
     mOutputCharLength = clip_prob_dim.d[1];
     mClipCharTypeSize = clip_prob_dim.d[2];
-    mClipEmbedingSize = mEngines[CLIP_TEXT_MODEL]->getBindingDims(true, CLIP_TEXT_INPUT_TEXT_TOKEN).d[1];
-
     mTmpText.resize(getBatchSize());
     mTmpScore.resize(getBatchSize());
     LOG(INFO) << "init CLIP visual temp space " << mOutputCharLength << "x" << mClipCharTypeSize;
-
-    mTokenizer = std::make_unique<BPETokenizer>(mParam.vocab_file, CLIP_VOCAB_SIZE);
-    // LOG(INFO) << "clip dict: " << CLIP_DICT;
 }
 
 
@@ -185,7 +188,6 @@ void OCRProcessor::decode(Text* const text, size_t idx) {
     text->text[mTmpText[idx].length()] = '\0';
     text->text_length = mTmpText[idx].length();
     text->conf = mTmpScore[idx];
-    // decodeATTNOrCLIP(text, idx, "[E]");
   }
 }
 
@@ -197,7 +199,7 @@ void OCRProcessor::decodeCTC(Text* const text, size_t idx) {
                     mBufManager.getBuffer(ctc_engine->getBufName(OCRNET_OUTPUT_PROB), BUFFER_TYPE::HOST)) +
                 offset;
   // for trt above 8.6, this node must be casted to int32
-  int32_t* cls = reinterpret_cast<int32_t*>(
+  int64_t* cls = reinterpret_cast<int64_t*>(
                      mBufManager.getBuffer(ctc_engine->getBufName(OCRNET_OUTPUT_ID), BUFFER_TYPE::HOST)) +
                  offset;
 
@@ -230,16 +232,15 @@ bool OCRProcessor::infer(bool sync_input, const cudaStream_t& stream) {
 
     decodeCLIP(stream, visual_prob_buf_name);
 
+    // if no text model, use vis model output directly
+    if (!mEngines[CLIP_TEXT_MODEL]) {
+      return true;
+    }
+
     auto tok_buf_name = mEngines[CLIP_TEXT_MODEL]->getBufName(CLIP_TEXT_INPUT_TEXT_TOKEN) ;
     auto* embeding_buf = static_cast<int*>(mBufManager.getBuffer(tok_buf_name, HOST));
     for(size_t i = 0; i < getBatchSize(); ++i) {
-            // tokenizer
-    mTokenizer->encode(mTmpText[i], mClipEmbedingSize, embeding_buf);
-    //   std::stringstream ss;
-    //   for(size_t j = 0; j < mClipEmbedingSize; ++j) {
-    //     ss <<" "<< embeding_buf[j];
-    //   }
-    //   LOG(INFO) << ss.str();
+      mTokenizer->encode(mTmpText[i], mClipEmbedingSize, embeding_buf);
       embeding_buf += mClipEmbedingSize;
     }
     mBufManager.copyHostToDevice(tok_buf_name, stream);  
@@ -269,7 +270,6 @@ void OCRProcessor::decodeCLIP(const cudaStream_t& stream, const std::string& buf
         size_t max_idx = 0;
         for(size_t t = 0; t < mClipCharTypeSize; ++t) {
           auto char_prob = prob[i * mOutputCharLength * mClipCharTypeSize + j * mClipCharTypeSize + t];
-        //   LOG(INFO) << char_prob;
           if (char_prob > max_prob) {
             max_prob = char_prob;
             max_idx = t;
@@ -280,8 +280,6 @@ void OCRProcessor::decodeCLIP(const cudaStream_t& stream, const std::string& buf
         mTmpText[i] += DICT[max_idx - 1];
     }
     mTmpScore[i] = acc_prob;
-    // LOG(INFO) << mTmpText[i];
-    // break;
   }
 
 }

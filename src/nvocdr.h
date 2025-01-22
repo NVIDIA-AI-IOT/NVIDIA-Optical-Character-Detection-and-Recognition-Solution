@@ -50,9 +50,9 @@ typedef struct {
   enum OCR_MODEL_TYPE { OCR_MODEL_TYPE_CTC, OCR_MODEL_TYPE_ATTN, OCR_MODEL_TYPE_CLIP };
   char model_file[MAX_FILE_PATH];
   char vocab_file[MAX_FILE_PATH];
-  char dict[MAX_FILE_PATH] = "default";
+  // char dict[MAX_FILE_PATH] = "default";
   // bs use to do infer, tune it for device with different mem, -1 to use engine allowed max
-  size_t batch_size =0;  
+  size_t batch_size = 0;  
   OCR_MODEL_TYPE type = OCR_MODEL_TYPE_CTC;
 } nvOCRParam;
 
@@ -98,6 +98,9 @@ bool nvOCDR_process(void* const nvocdr_handler, const nvOCDRInput& input,
 void nvOCDR_release(void* const nvocdr_handler);
 
 void nvOCDR_print_stat(void* const nvocdr_handler);
+
+void nvOCDR_dump_param(const nvOCDRParam& param, const char* param_path);
+void nvOCDR_parse_param(nvOCDRParam* param, const char* param_path);
 
 #ifdef __cplusplus
 }

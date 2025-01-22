@@ -4,14 +4,6 @@
 
 namespace nvocdr
 {
-struct ROI
-{
-    int x;
-    int y;
-    int width;
-    int height;
-};
-
 struct COLOR_PREPROC_PARAM
 {
     float rgb_scale;

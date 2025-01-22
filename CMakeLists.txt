@@ -11,6 +11,27 @@ find_package(glog 0.4.0 REQUIRED)
 
 option(BUILD_TESTS "Build test cases" ON)
 option(BUILD_SAMPLES "Build samples" ON)
+option(BUILD_PYBIND "Build python binding" ON)
+option(BUILD_TRITON "Build triton" ON)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# find tensorrt 
+list(APPEND PLUGINS "nvinfer")
+list(APPEND PLUGINS "nvonnxparser")
+# list(APPEND PLUGINS "nvparsers")
+list(APPEND PLUGINS "nvinfer_plugin")
+
+foreach(libName ${PLUGINS})
+    find_library(${libName}_lib NAMES ${libName} "/usr" PATH_SUFFIXES lib)
+    if(${libName}_lib)
+        message("-- TensorRT lib found: " ${libName})
+    endif()
+    list(APPEND TRT_PLUGIN_LIBS "${${libName}_lib}")
+endforeach()
+
 
 if(OpenCV_FOUND)
     message("-- Found OpenCV, includes headers: " ${OpenCV_INCLUDE_DIRS})
@@ -31,7 +52,6 @@ else()
 endif()
 
 add_subdirectory(src)
-add_subdirectory(pybind)
 
 if(BUILD_SAMPLES)
   add_subdirectory(samples)
@@ -39,4 +59,12 @@ endif()
 
 if(BUILD_TESTS)
   add_subdirectory(test)
+endif()
+
+if(BUILD_TESTS)
+  add_subdirectory(pybind)
+endif()
+
+if(BUILD_TESTS)
+  add_subdirectory(triton/backend)
 endif()

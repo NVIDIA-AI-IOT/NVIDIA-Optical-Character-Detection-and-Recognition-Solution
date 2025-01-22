@@ -40,9 +40,7 @@ class TRTEngine {
   TRTEngine(const char name[], const std::string& model_file, 
             size_t batch_size) : mName(name), mModelPath(model_file), mBatchSize(batch_size) {};
 
-  // bool init();
   bool initEngine();
-  // virtual bool customInit() = 0;
   bool postInit();
 
   // Do TRT-based inference with processed input and get output
@@ -59,7 +57,6 @@ class TRTEngine {
   ~TRTEngine() = default;
 
 
-  // Param mParam;
   std::string mName;
   std::string mModelPath;
   BufferManager& mBufManager = BufferManager::Instance();
