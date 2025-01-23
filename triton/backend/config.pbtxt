@@ -1,20 +1,36 @@
 runtime: "libtriton_nvocdr.so"
 backend: "nvocdr"
+max_batch_size: 0
 input [
     {
         name: "INPUT_DATA"
-        data_type: TYPE_STRING
+        data_type: TYPE_UINT8
         dims: [ -1 ]
     }    
 ]
      
 output [
     {
-        name: "OUTPUT_TEXT_AND_BOX"
-        data_type: TYPE_STRING
+        name: "OUTPUT_BOX"
+        data_type: TYPE_FP32
+        dims: [ -1 , 8]
+    }
+]
+
+output [
+    {
+        name: "OUTPUT_CONF"
+        data_type: TYPE_FP32
         dims: [ -1 ]
     }
 ]
     
+output [
+    {
+        name: "OUTPUT_TEXT"
+        data_type: TYPE_STRING
+        dims: [ -1 ]
+    }
+]
     
     

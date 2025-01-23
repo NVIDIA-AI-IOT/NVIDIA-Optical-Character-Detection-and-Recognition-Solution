@@ -124,26 +124,25 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   backend_config.Find("cmdline", &cmdline_config);
 
   triton::common::TritonJson::Value spec_file_val;
-  
+  nvOCDRParam param;
+
   if (cmdline_config.Find("spec", &spec_file_val)) {
       std::string spec_file;
       spec_file_val.AsString(&spec_file);
       LOG_MESSAGE(
       TRITONSERVER_LOG_INFO, ("nvocdr spec file: " + spec_file).c_str());
-      nvOCDRParam param;
       nvOCDR_parse_param(&param, spec_file.c_str());
-      LOG_MESSAGE(
-        TRITONSERVER_LOG_ERROR, param.ocr_param.model_file
-      );
-
   } else {
       LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "nvocdr spec file not found");
   }
+
+  auto nvocdr_handler = nvOCDR_initialize(param);
+
   // This backend does not require any "global" state but as an
   // example create a string to demonstrate.
-  std::string* state = new std::string("backend state");
+  // std::string* state = new std::string("backend state");
   RETURN_IF_ERROR(
-      TRITONBACKEND_BackendSetState(backend, reinterpret_cast<void*>(state)));
+      TRITONBACKEND_BackendSetState(backend, nvocdr_handler));
 
   return nullptr;  // success
 }
@@ -157,14 +156,12 @@ TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
   // Delete the "global" state associated with the backend.
   void* vstate;
   RETURN_IF_ERROR(TRITONBACKEND_BackendState(backend, &vstate));
-  std::string* state = reinterpret_cast<std::string*>(vstate);
+  // std::string* state = reinterpret_cast<std::s>(vstate);
 
-  LOG_MESSAGE(
-      TRITONSERVER_LOG_INFO,
-      (std::string("TRITONBACKEND_Finalize: state is '") + *state + "'")
-          .c_str());
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, "nvocdr released");
 
-  delete state;
+  // delete state;
+  nvOCDR_release(vstate);
 
   return nullptr;  // success
 }
@@ -198,7 +195,7 @@ class ModelState : public BackendModel {
   // Shape of the input and output tensor as given in the model
   // configuration file. This shape will not include the batch
   // dimension (if the model has one).
-  const std::vector<int64_t>& TensorNonBatchShape() const { return nb_shape_; }
+  // const std::vector<int64_t>& TensorNonBatchShape() const { return nb_shape_; }
 
   // Shape of the input and output tensor, including the batch
   // dimension (if the model has one). This method cannot be called
@@ -280,6 +277,7 @@ ModelState::ValidateModelConfig()
 {
   // If verbose logging is enabled, dump the model's configuration as
   // JSON into the console output.
+  LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "start model config validate");
   if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
     common::TritonJson::WriteBuffer buffer;
     RETURN_IF_ERROR(ModelConfig().PrettyWrite(&buffer));
@@ -296,12 +294,12 @@ ModelState::ValidateModelConfig()
   RETURN_IF_ERROR(ModelConfig().MemberAsArray("output", &outputs));
 
   // The model must have exactly 1 input and 1 output.
-  RETURN_ERROR_IF_FALSE(
-      inputs.ArraySize() == 1, TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("model configuration must have 1 input"));
-  RETURN_ERROR_IF_FALSE(
-      outputs.ArraySize() == 1, TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("model configuration must have 1 output"));
+  // RETURN_ERROR_IF_FALSE(
+  //     inputs.ArraySize() == 1, TRITONSERVER_ERROR_INVALID_ARG,
+  //     std::string("model configuration must have 1 input"));
+  // RETURN_ERROR_IF_FALSE(
+  //     outputs.ArraySize() == 1, TRITONSERVER_ERROR_INVALID_ARG,
+  //     std::string("model configuration must have 1 output"));
 
   common::TritonJson::Value input, output;
   RETURN_IF_ERROR(inputs.IndexAsObject(0, &input));
@@ -313,44 +311,44 @@ ModelState::ValidateModelConfig()
   RETURN_IF_ERROR(input.MemberAsString("name", &input_name, &input_name_len));
   input_name_ = std::string(input_name);
 
-  const char* output_name;
-  size_t output_name_len;
-  RETURN_IF_ERROR(
-      output.MemberAsString("name", &output_name, &output_name_len));
-  output_name_ = std::string(output_name);
+  // const char* output_name;
+  // size_t output_name_len;
+  // RETURN_IF_ERROR(
+  //     output.MemberAsString("name", &output_name, &output_name_len));
+  // output_name_ = std::string(output_name);
 
   // Input and output must have same datatype
-  std::string input_dtype, output_dtype;
-  RETURN_IF_ERROR(input.MemberAsString("data_type", &input_dtype));
-  RETURN_IF_ERROR(output.MemberAsString("data_type", &output_dtype));
-  RETURN_ERROR_IF_FALSE(
-      input_dtype == output_dtype, TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("expected input and output datatype to match, got ") +
-          input_dtype + " and " + output_dtype);
-  datatype_ = ModelConfigDataTypeToTritonServerDataType(input_dtype);
+  // std::string input_dtype, output_dtype;
+  // RETURN_IF_ERROR(input.MemberAsString("data_type", &input_dtype));
+  // RETURN_IF_ERROR(output.MemberAsString("data_type", &output_dtype));
+  // RETURN_ERROR_IF_FALSE(
+  //     input_dtype == output_dtype, TRITONSERVER_ERROR_INVALID_ARG,
+  //     std::string("expected input and output datatype to match, got ") +
+  //         input_dtype + " and " + output_dtype);
+  // datatype_ = ModelConfigDataTypeToTritonServerDataType(input_dtype);
 
   // Input and output must have same shape. Reshape is not supported
   // on either input or output so flag an error is the model
   // configuration uses it.
-  triton::common::TritonJson::Value reshape;
-  RETURN_ERROR_IF_TRUE(
-      input.Find("reshape", &reshape), TRITONSERVER_ERROR_UNSUPPORTED,
-      std::string("reshape not supported for input tensor"));
-  RETURN_ERROR_IF_TRUE(
-      output.Find("reshape", &reshape), TRITONSERVER_ERROR_UNSUPPORTED,
-      std::string("reshape not supported for output tensor"));
+  // triton::common::TritonJson::Value reshape;
+  // RETURN_ERROR_IF_TRUE(
+  //     input.Find("reshape", &reshape), TRITONSERVER_ERROR_UNSUPPORTED,
+  //     std::string("reshape not supported for input tensor"));
+  // RETURN_ERROR_IF_TRUE(
+  //     output.Find("reshape", &reshape), TRITONSERVER_ERROR_UNSUPPORTED,
+  //     std::string("reshape not supported for output tensor"));
 
-  std::vector<int64_t> input_shape, output_shape;
-  RETURN_IF_ERROR(backend::ParseShape(input, "dims", &input_shape));
-  RETURN_IF_ERROR(backend::ParseShape(output, "dims", &output_shape));
+  // std::vector<int64_t> input_shape, output_shape;
+  // RETURN_IF_ERROR(backend::ParseShape(input, "dims", &input_shape));
+  // RETURN_IF_ERROR(backend::ParseShape(output, "dims", &output_shape));
 
-  RETURN_ERROR_IF_FALSE(
-      input_shape == output_shape, TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("expected input and output shape to match, got ") +
-          backend::ShapeToString(input_shape) + " and " +
-          backend::ShapeToString(output_shape));
+  // RETURN_ERROR_IF_FALSE(
+  //     input_shape == output_shape, TRITONSERVER_ERROR_INVALID_ARG,
+  //     std::string("expected input and output shape to match, got ") +
+  //         backend::ShapeToString(input_shape) + " and " +
+  //         backend::ShapeToString(output_shape));
 
-  nb_shape_ = input_shape;
+  // nb_shape_ = input_shape;
 
   return nullptr;  // success
 }
@@ -374,7 +372,6 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   RETURN_IF_ERROR(ModelState::Create(model, &model_state));
   RETURN_IF_ERROR(
       TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
-
   return nullptr;  // success
 }
 
@@ -425,12 +422,12 @@ class ModelInstanceState : public BackendModelInstance {
       : BackendModelInstance(model_state, triton_model_instance),
         model_state_(model_state)
   {
-    nvOCDRParam param;
+    // nvOCDRParam param;
 
   }
 
   ModelState* model_state_;
-  void* nvocdr_;
+  // void* nvocdr_;
 };
 
 TRITONSERVER_Error*
@@ -602,7 +599,7 @@ TRITONBACKEND_ModelInstanceExecute(
   std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types =
       {{TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
 
-  const char* input_buffer;
+  char* input_buffer;
   size_t input_buffer_byte_size;
   TRITONSERVER_MemoryType input_buffer_memory_type;
   int64_t input_buffer_memory_type_id;
@@ -611,7 +608,7 @@ TRITONBACKEND_ModelInstanceExecute(
       responses, request_count,
       collector.ProcessTensor(
           model_state->InputTensorName().c_str(), nullptr /* existing_buffer */,
-          0 /* existing_buffer_byte_size */, allowed_input_types, &input_buffer,
+          0 /* existing_buffer_byte_size */, allowed_input_types, const_cast<const char**>(&input_buffer),
           &input_buffer_byte_size, &input_buffer_memory_type,
           &input_buffer_memory_type_id));
 
@@ -620,12 +617,13 @@ TRITONBACKEND_ModelInstanceExecute(
   // stream or event that was used when creating the collector. For
   // this backend, GPU is not supported and so no CUDA sync should
   // be needed; so if 'true' is returned simply log an error.
-  const bool need_cuda_input_sync = collector.Finalize();
-  if (need_cuda_input_sync) {
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_ERROR,
-        "'recommended' backend: unexpected CUDA sync required by collector");
-  }
+  // const bool need_cuda_input_sync = collector.Finalize();
+  // if (need_cuda_input_sync) {
+  //   LOG_MESSAGE(
+  //       TRITONSERVER_LOG_ERROR,
+  //       "'recommended' backend: unexpected CUDA sync required by collector");
+  // }
+  LOG_MESSAGE(TRITONSERVER_LOG_ERROR, std::string("input buffer size: " + std::to_string(input_buffer_byte_size)).c_str());
 
   // 'input_buffer' contains the batched input tensor. The backend can
   // implement whatever logic is necessary to produce the output
@@ -633,25 +631,44 @@ TRITONBACKEND_ModelInstanceExecute(
   // returns the input tensor value in the output tensor so no actual
   // computation is needed.
 
+  TRITONBACKEND_Model* model;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceModel(instance, &model));
+
+  TRITONBACKEND_Backend* backend;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelBackend(model, &backend));
+
+  void* nvocdr_handler;
+  RETURN_IF_ERROR(TRITONBACKEND_BackendState(backend, &nvocdr_handler));
+
+  nvOCDRInput nvocdr_input {
+    .data = static_cast<void*>(input_buffer)
+  };
+  nvOCDROutput nvocdr_output;
+  nvOCDR_process(nvocdr_handler, nvocdr_input, &nvocdr_output);
+
+  auto num_text = nvocdr_output.num_texts;
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, ("[nvocdr] infer result: " + std::to_string(num_text) + " texts").c_str());
+
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  LOG_MESSAGE(
-      TRITONSERVER_LOG_INFO,
-      (std::string("model ") + model_state->Name() + ": requests in batch " +
-       std::to_string(request_count))
-          .c_str());
-  std::string tstr;
-  IGNORE_ERROR(BufferAsTypedString(
-      tstr, input_buffer, input_buffer_byte_size,
-      model_state->TensorDataType()));
-  LOG_MESSAGE(
-      TRITONSERVER_LOG_INFO,
-      (std::string("batched " + model_state->InputTensorName() + " value: ") +
-       tstr)
-          .c_str());
+  // LOG_MESSAGE(
+  //     TRITONSERVER_LOG_INFO,
+  //     (std::string("model ") + model_state->Name() + ": requests in batch " +
+  //      std::to_string(request_count))
+  //         .c_str());
+  // std::string tstr;
+  // IGNORE_ERROR(BufferAsTypedString(
+  //     tstr, input_buffer, input_buffer_byte_size,
+  //     model_state->TensorDataType()));
+  // LOG_MESSAGE(
+  //     TRITONSERVER_LOG_INFO,
+  //     (std::string("batched " + model_state->InputTensorName() + " value: ") +
+  //      tstr)
+  //         .c_str());
 
-  const char* output_buffer = input_buffer;
+  // const char* output_buffer = input_buffer;
+
   TRITONSERVER_MemoryType output_buffer_memory_type = input_buffer_memory_type;
   int64_t output_buffer_memory_type_id = input_buffer_memory_type_id;
 
@@ -663,9 +680,9 @@ TRITONBACKEND_ModelInstanceExecute(
       responses, request_count,
       model_state->SupportsFirstDimBatching(&supports_first_dim_batching));
 
-  std::vector<int64_t> tensor_shape;
-  RESPOND_ALL_AND_SET_NULL_IF_ERROR(
-      responses, request_count, model_state->TensorShape(tensor_shape));
+  // std::vector<int64_t> tensor_shape{1};
+  // RESPOND_ALL_AND_SET_NULL_IF_ERROR(
+  //     responses, request_count, model_state->TensorShape(tensor_shape));
 
   // Because the output tensor values are concatenated into a single
   // contiguous 'output_buffer', the backend must "scatter" them out
@@ -678,15 +695,17 @@ TRITONBACKEND_ModelInstanceExecute(
   // 'output_buffer' corresponding to each request's output into the
   // response for that request.
 
-  BackendOutputResponder responder(
-      requests, request_count, &responses, model_state->TritonMemoryManager(),
-      supports_first_dim_batching, false /* pinned_enabled */,
-      nullptr /* stream*/);
+  // BackendOutputResponder responder(
+  //     requests, request_count, &responses, model_state->TritonMemoryManager(),
+  //     supports_first_dim_batching, false /* pinned_enabled */,
+  //     nullptr /* stream*/);
+  // LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "1");
 
-  responder.ProcessTensor(
-      model_state->OutputTensorName().c_str(), model_state->TensorDataType(),
-      tensor_shape, output_buffer, output_buffer_memory_type,
-      output_buffer_memory_type_id);
+  // responder.ProcessTensor(
+  //     model_state->OutputTensorName().c_str(), model_state->TensorDataType(),
+  //     tensor_shape, output_buffer, output_buffer_memory_type,
+  //     output_buffer_memory_type_id);
+  // LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "1");
 
   // Finalize the responder. If 'true' is returned, the output
   // tensors' data will not be valid until the backend synchronizes
@@ -694,15 +713,59 @@ TRITONBACKEND_ModelInstanceExecute(
   // responder. For this backend, GPU is not supported and so no CUDA
   // sync should be needed; so if 'true' is returned simply log an
   // error.
-  const bool need_cuda_output_sync = responder.Finalize();
-  if (need_cuda_output_sync) {
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_ERROR,
-        "'recommended' backend: unexpected CUDA sync required by responder");
-  }
+  // const bool need_cuda_output_sync = responder.Finalize();
+  // if (need_cuda_output_sync) {
+  //   LOG_MESSAGE(
+  //       TRITONSERVER_LOG_ERROR,
+  //       "'recommended' backend: unexpected CUDA sync required by responder");
+  // }
 
   // Send all the responses that haven't already been sent because of
   // an earlier error.
+
+  // todo (shuohan)
+
+  std::vector<int64_t> box_dim{num_text, 8};
+  // std::vector<int64_t> txt_dim{num_text, MAX_CHARACTER_LEN};
+  auto response = responses[0];
+  TRITONBACKEND_Output* box_output, *score_output, *text_output;
+
+  size_t box_bytes = num_text * 8 * sizeof(float);
+  size_t score_bytes = num_text * sizeof(float);
+  // size_t txt_bytes = num_text * MAX_CHARACTER_LEN;
+  size_t txt_bytes = 0;
+  for(size_t i = 0; i < num_text; i++) {
+    txt_bytes += 4 + nvocdr_output.texts[i].text_length;
+  }
+
+  float* box_buf, *score_buf;
+  char* txt_buf;
+
+  TRITONBACKEND_ResponseOutput(response, &box_output, "OUTPUT_BOX", TRITONSERVER_datatype_enum::TRITONSERVER_TYPE_FP32,
+                               box_dim.data(), box_dim.size());
+  TRITONBACKEND_ResponseOutput(response, &score_output, "OUTPUT_CONF", TRITONSERVER_datatype_enum::TRITONSERVER_TYPE_FP32,
+                               box_dim.data(), 1);
+  TRITONBACKEND_ResponseOutput(response, &text_output, "OUTPUT_TEXT", TRITONSERVER_datatype_enum::TRITONSERVER_TYPE_BYTES,
+                               box_dim.data(), 1);
+
+  TRITONBACKEND_OutputBuffer(box_output, reinterpret_cast<void**>(&box_buf), box_bytes, &output_buffer_memory_type, &output_buffer_memory_type_id);
+  TRITONBACKEND_OutputBuffer(score_output, reinterpret_cast<void**>(&score_buf), score_bytes, &output_buffer_memory_type, &output_buffer_memory_type_id);
+  TRITONBACKEND_OutputBuffer(text_output, reinterpret_cast<void**>(&txt_buf), txt_bytes, &output_buffer_memory_type, &output_buffer_memory_type_id);
+
+  size_t t_offset = 0;
+  for(size_t i = 0; i < num_text; ++i) {
+    auto &text = nvocdr_output.texts[i];
+    memcpy(box_buf + 8 * i, text.polygon, 8 * sizeof(8));
+    memcpy(score_buf + i, &(text.conf), sizeof(float));
+
+    // https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/protocol/extension_binary_data.html#binary-tensor-request
+    unsigned int l = text.text_length;
+    memcpy(txt_buf + t_offset, &l, 4);
+    memcpy(txt_buf + t_offset + 4, text.text, l);
+    t_offset += 4 + l;
+  }
+
+
   for (auto& response : responses) {
     if (response != nullptr) {
       LOG_IF_ERROR(
@@ -711,6 +774,7 @@ TRITONBACKEND_ModelInstanceExecute(
           "failed to send response");
     }
   }
+  LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "1");
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);

@@ -19,6 +19,12 @@ void* nvOCDR_initialize(const nvOCDRParam& param) {
   return reinterpret_cast<void*>(handler);
 }
 
+void nvOCDR_release(void* const nvocdr_handler) {
+  nvocdr::nvOCDR* handler = reinterpret_cast<nvocdr::nvOCDR*>(nvocdr_handler);
+  delete handler;
+}
+
+
 bool nvOCDR_process(void* const nvocdr_handler, const nvOCDRInput& input,
                     nvOCDROutput* const output) {
   nvocdr::nvOCDR* handler = reinterpret_cast<nvocdr::nvOCDR*>(nvocdr_handler);

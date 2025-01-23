@@ -2,3 +2,4 @@
 build*
 *.png
 onnx_models
+__pycache__
