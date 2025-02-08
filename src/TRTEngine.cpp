@@ -184,12 +184,8 @@ TRTEngine::getMaxTrtIoTensorSizeByName(std::string& tensorName)
 size_t 
 TRTEngine::getTrtIoTensorDtypeSizeByName(std::string& tensorName)
 {
-    int bindingIndex = mEngine->getBindingIndex(tensorName.c_str());
-    if (bindingIndex == -1) {
-        std::cerr << "Tensor name not found in the engine." << std::endl;
-        return 0;
-    }
-    nvinfer1::DataType dataType = mEngine->getBindingDataType(bindingIndex);
+
+    nvinfer1::DataType dataType = mEngine->getTensorDataType(tensorName.c_str());
     return sizeof(dataType);
 }
 
