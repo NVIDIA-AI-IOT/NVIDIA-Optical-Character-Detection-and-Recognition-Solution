@@ -676,7 +676,7 @@ gboolean nvds_add_ocdr_meta(NvDsBatchMeta *batch_meta, nvOCDROutputMeta &output)
     }
   }
   nvds_release_meta_lock (batch_meta);
-  return true;
+  return TRUE;
 }
 
 #if DEBUG
