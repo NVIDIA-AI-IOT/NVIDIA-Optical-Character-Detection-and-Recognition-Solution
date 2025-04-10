@@ -50,7 +50,7 @@ wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team
 mv dcn_resnet18.onnx ocdnet.onnx
 
 # Download OCRnet onnx
-wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
+wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v1.0.1/files?redirect=true&path=ocrnet_resnet50.onnx' -O ocrnet_resnet50.onnx
 
 mv ocrnet_resnet50.onnx ocrnet.onnx
 
@@ -64,7 +64,7 @@ mv character_list character_list.txt
 # wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocdnet/deployable_v2.0/files?redirect=true&path=ocdnet_fan_tiny_2x_icdar.onnx' -O ocdnet_fan_tiny_2x_icdar.onnx
 
 # # Download OCRNet-ViT onnx
-# wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=ocrnet-vit.onnx' -O ocrnet-vit.onnx
+# wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0.1/files?redirect=true&path=ocrnet-vit.onnx' -O ocrnet-vit.onnx
 
 # # Download OCRnet character_list
 # wget --content-disposition 'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/ocrnet/deployable_v2.0/files?redirect=true&path=character_list' -O character_list
