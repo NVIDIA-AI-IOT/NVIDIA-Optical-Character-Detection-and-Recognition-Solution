@@ -44,7 +44,18 @@ The crop-based inference setting is good at recognize dense text areas:
 ![doc_scan](./test_img/doc.jpg_v.jpg)
 
 ## nvCLIP4STR
+### nvCLIP4STR introducion
 
+nvCLIP4STR is based on [CLIP4STR](https://arxiv.org/abs/2305.14014). This model is clip-based atchitecture, it used [NVCLIP](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/nvclip_vit) as pretrained weights, and it will take RGB images as network input and produce sequence output. nvCLIP4STR has two encoder decoder branches: a visual branch and a cross-modal branch. The visual branch provides an initial prediction based on the visual feature, and the cross-modal branch refines this prediction by addressing the discrepancy between the visual feature and text semantics.
+![nvclip4str](./test_img/CLIP4STR.jpg)
+
+Because the results from visual branch will be tokenized and used as input for cross-modal branch, so we need to split nvCLIP4STR to 2 ONNX models, one is for visual branch, other one is for cross-modal branch:
+
+* vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.visual.sim.onnx
+* vl4str_2024-11-19-06-48-47_checkpoints_epoch_9-step_15580-val_accuracy_71.1684-val_NED_79.9133.text.sim.onnx
+
+
+### nvCLIP4STR inference
 In this nvCLIP4STR sample, the inference is using `CLIP4STR` for OCRnet and `vit` for OCDnet to do inference. The origin charset for this version of OCRnet includes 94 chars, you need to push these 94 chars to character_list 
 ```shell
 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
